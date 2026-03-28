@@ -8,7 +8,7 @@ export default function Home() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) { router.replace("/login"); return }
-      supabase.table("profiles").select("is_admin").eq("id", session.user.id).single()
+      supabase.from("profiles").select("is_admin").eq("id", session.user.id).single()
         .then(({ data }) => {
           router.replace(data?.is_admin ? "/admin" : "/artist")
         })

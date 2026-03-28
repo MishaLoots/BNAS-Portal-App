@@ -337,7 +337,12 @@ export default function ArtistDetailPage() {
                   <tr>
                     <th>Date</th><th>Event</th><th>Type</th>
                     <th className="text-right">Gross</th><th>Pay</th>
-                    <th className="text-right">Comm</th><th className="text-right">Band</th>
+                    <th className="text-right">Comm</th>
+                    <th className="text-right">Sound</th>
+                    <th className="text-right">Mus 1</th>
+                    <th className="text-right">Mus 2</th>
+                    <th className="text-right">Mus 3</th>
+                    <th className="text-right">Other</th>
                     <th className="text-right">WC</th><th className="text-right">Nett</th>
                     <th>Batch</th><th>Status</th><th className="text-center">Dep%</th>
                     <th></th>
@@ -354,7 +359,11 @@ export default function ArtistDetailPage() {
                         <td className="text-right font-mono">{ZAR(s.gross)}</td>
                         <td className={`text-xs font-medium ${s.pay_type === "Escrow" ? "text-bblue" : "text-gray-500"}`}>{s.pay_type}</td>
                         <td className="text-right font-mono text-gray-600">{ZAR(c.comm)}</td>
-                        <td className="text-right font-mono text-gray-600">{ZAR(c.totalBand)}</td>
+                        <td className="text-right font-mono text-gray-600">{s.sound ? ZAR(s.sound) : "—"}</td>
+                        <td className="text-right font-mono text-gray-600">{s.mus1 ? ZAR(s.mus1) : "—"}</td>
+                        <td className="text-right font-mono text-gray-600">{s.mus2 ? ZAR(s.mus2) : "—"}</td>
+                        <td className="text-right font-mono text-gray-600">{s.mus3 ? ZAR(s.mus3) : "—"}</td>
+                        <td className="text-right font-mono text-gray-600">{s.other_costs ? ZAR(s.other_costs) : "—"}</td>
                         <td className="text-right font-mono text-gray-600">{ZAR(c.warchest)}</td>
                         <td className="text-right font-mono font-semibold">{ZAR(c.nett)}</td>
                         <td className="text-gray-500">{s.batch_num}</td>
@@ -391,7 +400,11 @@ export default function ArtistDetailPage() {
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.gross, 0))}</td>
                     <td></td>
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).comm, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).totalBand, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.sound, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus1, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus2, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus3, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.other_costs, 0))}</td>
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).warchest, 0))}</td>
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).nett, 0))}</td>
                     <td colSpan={4}></td>

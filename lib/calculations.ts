@@ -5,7 +5,7 @@ export const ZAR = (n: number) =>
 
 export function calcShow(s: Show) {
   const comm      = s.gross * s.comm_pct
-  const totalBand = s.sound + s.mus1 + s.mus2 + s.mus3 + s.other_costs
+  const totalBand = s.sound + s.mus1 + s.mus2 + s.mus3 + (s.mus4 || 0) + s.other_costs
   const subtotal  = s.gross - comm - totalBand
   const warchest  = s.pay_type === "Escrow" ? subtotal * s.warchest_pct : 0
   const nett      = subtotal - warchest

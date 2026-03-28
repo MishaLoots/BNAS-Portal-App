@@ -100,6 +100,7 @@ export default function AdminPage() {
                 <tr>
                   <th>Artist</th>
                   <th>Escrow Account</th>
+                  <th className="text-center">Shows</th>
                   <th className="text-right">Current Balance</th>
                   <th className="text-right">Pending</th>
                   <th className="text-right">Projected</th>
@@ -119,6 +120,7 @@ export default function AdminPage() {
                     <tr key={artist.id}>
                       <td className="font-medium">{artist.name}</td>
                       <td className="text-gray-500">{artist.escrow_account}</td>
+                      <td className="text-center text-gray-500">{shows.length}</td>
                       <td className={`text-right font-mono ${eb.current < 0 ? "text-red-600" : ""}`}>{ZAR(eb.current)}</td>
                       <td className="text-right font-mono text-gray-500">{ZAR(eb.pending)}</td>
                       <td className="text-right font-mono">{ZAR(eb.projected)}</td>
@@ -140,6 +142,7 @@ export default function AdminPage() {
               <tfoot>
                 <tr className="bg-lblue font-semibold">
                   <td colSpan={2}>TOTALS</td>
+                  <td className="text-center">{rows.reduce((s, r) => s + r.shows.length, 0)}</td>
                   <td className={`text-right font-mono ${totals.current < 0 ? "text-red-600" : ""}`}>{ZAR(totals.current)}</td>
                   <td className="text-right font-mono">{ZAR(totals.pending)}</td>
                   <td className="text-right font-mono">{ZAR(totals.projected)}</td>

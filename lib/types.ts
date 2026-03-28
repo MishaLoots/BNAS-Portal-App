@@ -8,6 +8,10 @@ export interface Artist {
   opening_balance: number
   loan_opening: number
   has_csr: boolean
+  mus1_name: string
+  mus2_name: string
+  mus3_name: string
+  mus4_name: string
 }
 
 export interface Show {
@@ -23,7 +27,10 @@ export interface Show {
   mus1: number
   mus2: number
   mus3: number
+  mus4: number
   other_costs: number
+  responsible_agent: string | null
+  secondary_agent: string | null
   warchest_pct: number
   batch_num: string | null
   status: string | null

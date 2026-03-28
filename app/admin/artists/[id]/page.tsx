@@ -8,9 +8,10 @@ import { ZAR, calcShow, escrowBalance, nettOwed } from "@/lib/calculations"
 
 type Tab = "shows" | "escrow" | "payouts" | "loan" | "batch"
 
-const SHOW_TYPES  = ["Rest/Club","Festival","Corporate","Private","Wed/Rec","Feature","Headline","INT Support","Other"]
+const SHOW_TYPES  = ["Rest/Club","Festival","Corporate","Private","Wed/Rec","Feature","Headline","INT Support","School","Other"]
 const STATUSES    = ["All Paid","Fee Received","Pending","Cancelled"]
 const XFER_TYPES  = ["Batch Payout","Warchest Dist.","Loan/Other","Refund","Other"]
+const AGENTS      = ["","Misha","Gareth","Jako","Que"]
 
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—"
@@ -21,8 +22,9 @@ function fmtDate(s: string | null | undefined): string {
 const BLANK_SHOW = {
   show_date: "", event: "", show_type: "Rest/Club", gross: "",
   pay_type: "Escrow", comm_pct: "0.20", sound: "0", mus1: "0", mus2: "0",
-  mus3: "0", other_costs: "0", warchest_pct: "0.20",
+  mus3: "0", mus4: "0", other_costs: "0", warchest_pct: "0.20",
   batch_num: "", status: "Pending", dep_pct: "0", dep_is_pre: false, notes: "",
+  responsible_agent: "", secondary_agent: "",
 }
 
 export default function ArtistDetailPage() {
@@ -86,10 +88,11 @@ export default function ArtistDetailPage() {
       gross: String(s.gross), pay_type: s.pay_type,
       comm_pct: String(s.comm_pct), sound: String(s.sound),
       mus1: String(s.mus1), mus2: String(s.mus2), mus3: String(s.mus3),
-      other_costs: String(s.other_costs), warchest_pct: String(s.warchest_pct),
+      mus4: String(s.mus4 || 0), other_costs: String(s.other_costs), warchest_pct: String(s.warchest_pct),
       batch_num: s.batch_num || "", status: s.status || "Pending",
       dep_pct: String(s.dep_pct ?? 0), dep_is_pre: s.dep_is_pre || false,
       notes: s.notes || "",
+      responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "",
     })
     setShowForm(true)
   }
@@ -114,6 +117,7 @@ export default function ArtistDetailPage() {
       mus1: parseFloat(newShow.mus1) || 0,
       mus2: parseFloat(newShow.mus2) || 0,
       mus3: parseFloat(newShow.mus3) || 0,
+      mus4: parseFloat(newShow.mus4) || 0,
       other_costs: parseFloat(newShow.other_costs) || 0,
       warchest_pct: parseFloat(newShow.warchest_pct) || 0,
       dep_pct: newShow.dep_is_pre ? null : parseFloat(newShow.dep_pct) || 0,
@@ -121,6 +125,8 @@ export default function ArtistDetailPage() {
       batch_num: newShow.batch_num || null,
       status: newShow.status,
       notes: newShow.notes,
+      responsible_agent: newShow.responsible_agent || null,
+      secondary_agent: newShow.secondary_agent || null,
     }
     if (editingShowId) {
       await supabase.from("shows").update(payload).eq("id", editingShowId)
@@ -311,9 +317,10 @@ export default function ArtistDetailPage() {
                   <div><label>Comm %</label><input type="number" step="0.01" value={newShow.comm_pct} onChange={e => setNewShow(s => ({ ...s, comm_pct: e.target.value }))} /></div>
                   <div><label>Warchest %</label><input type="number" step="0.01" value={newShow.warchest_pct} onChange={e => setNewShow(s => ({ ...s, warchest_pct: e.target.value }))} /></div>
                   <div><label>Sound (R)</label><input type="number" value={newShow.sound} onChange={e => setNewShow(s => ({ ...s, sound: e.target.value }))} /></div>
-                  <div><label>Mus 1 (R)</label><input type="number" value={newShow.mus1} onChange={e => setNewShow(s => ({ ...s, mus1: e.target.value }))} /></div>
-                  <div><label>Mus 2 (R)</label><input type="number" value={newShow.mus2} onChange={e => setNewShow(s => ({ ...s, mus2: e.target.value }))} /></div>
-                  <div><label>Mus 3 (R)</label><input type="number" value={newShow.mus3} onChange={e => setNewShow(s => ({ ...s, mus3: e.target.value }))} /></div>
+                  {artist.mus1_name && <div><label>{artist.mus1_name} (R)</label><input type="number" value={newShow.mus1} onChange={e => setNewShow(s => ({ ...s, mus1: e.target.value }))} /></div>}
+                  {artist.mus2_name && <div><label>{artist.mus2_name} (R)</label><input type="number" value={newShow.mus2} onChange={e => setNewShow(s => ({ ...s, mus2: e.target.value }))} /></div>}
+                  {artist.mus3_name && <div><label>{artist.mus3_name} (R)</label><input type="number" value={newShow.mus3} onChange={e => setNewShow(s => ({ ...s, mus3: e.target.value }))} /></div>}
+                  {artist.mus4_name && <div><label>{artist.mus4_name} (R)</label><input type="number" value={newShow.mus4} onChange={e => setNewShow(s => ({ ...s, mus4: e.target.value }))} /></div>}
                   <div><label>Other (R)</label><input type="number" value={newShow.other_costs} onChange={e => setNewShow(s => ({ ...s, other_costs: e.target.value }))} /></div>
                   <div><label>Status</label><select value={newShow.status} onChange={e => setNewShow(s => ({ ...s, status: e.target.value }))}>{STATUSES.map(st => <option key={st}>{st}</option>)}</select></div>
                   <div><label>Batch #</label><input value={newShow.batch_num} onChange={e => setNewShow(s => ({ ...s, batch_num: e.target.value }))} /></div>
@@ -322,6 +329,8 @@ export default function ArtistDetailPage() {
                     <input type="checkbox" id="pre" checked={newShow.dep_is_pre} onChange={e => setNewShow(s => ({ ...s, dep_is_pre: e.target.checked }))} className="w-auto" />
                     <label htmlFor="pre" className="mb-0">Pre-period</label>
                   </div>
+                  <div><label>Responsible Agent</label><select value={newShow.responsible_agent} onChange={e => setNewShow(s => ({ ...s, responsible_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
+                  <div><label>Secondary Agent</label><select value={newShow.secondary_agent} onChange={e => setNewShow(s => ({ ...s, secondary_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
                   <div className="col-span-2"><label>Notes</label><input value={newShow.notes} onChange={e => setNewShow(s => ({ ...s, notes: e.target.value }))} /></div>
                   <div className="col-span-4 flex gap-2">
                     <button onClick={saveShow} disabled={saving} className="btn-primary">{saving ? "Saving…" : editingShowId ? "Save Changes" : "Save Show"}</button>
@@ -339,12 +348,13 @@ export default function ArtistDetailPage() {
                     <th className="text-right">Gross</th><th>Pay</th>
                     <th className="text-right">Comm</th>
                     <th className="text-right">Sound</th>
-                    <th className="text-right">Mus 1</th>
-                    <th className="text-right">Mus 2</th>
-                    <th className="text-right">Mus 3</th>
+                    {artist.mus1_name && <th className="text-right">{artist.mus1_name}</th>}
+                    {artist.mus2_name && <th className="text-right">{artist.mus2_name}</th>}
+                    {artist.mus3_name && <th className="text-right">{artist.mus3_name}</th>}
+                    {artist.mus4_name && <th className="text-right">{artist.mus4_name}</th>}
                     <th className="text-right">Other</th>
                     <th className="text-right">WC</th><th className="text-right">Nett</th>
-                    <th>Batch</th><th>Status</th><th className="text-center">Dep%</th>
+                    <th>Agent</th><th>Batch</th><th>Status</th><th className="text-center">Dep%</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -360,12 +370,14 @@ export default function ArtistDetailPage() {
                         <td className={`text-xs font-medium ${s.pay_type === "Escrow" ? "text-bblue" : "text-gray-500"}`}>{s.pay_type}</td>
                         <td className="text-right font-mono text-gray-600">{ZAR(c.comm)}</td>
                         <td className="text-right font-mono text-gray-600">{s.sound ? ZAR(s.sound) : "—"}</td>
-                        <td className="text-right font-mono text-gray-600">{s.mus1 ? ZAR(s.mus1) : "—"}</td>
-                        <td className="text-right font-mono text-gray-600">{s.mus2 ? ZAR(s.mus2) : "—"}</td>
-                        <td className="text-right font-mono text-gray-600">{s.mus3 ? ZAR(s.mus3) : "—"}</td>
+                        {artist.mus1_name && <td className="text-right font-mono text-gray-600">{s.mus1 ? ZAR(s.mus1) : "—"}</td>}
+                        {artist.mus2_name && <td className="text-right font-mono text-gray-600">{s.mus2 ? ZAR(s.mus2) : "—"}</td>}
+                        {artist.mus3_name && <td className="text-right font-mono text-gray-600">{s.mus3 ? ZAR(s.mus3) : "—"}</td>}
+                        {artist.mus4_name && <td className="text-right font-mono text-gray-600">{s.mus4 ? ZAR(s.mus4) : "—"}</td>}
                         <td className="text-right font-mono text-gray-600">{s.other_costs ? ZAR(s.other_costs) : "—"}</td>
                         <td className="text-right font-mono text-gray-600">{ZAR(c.warchest)}</td>
                         <td className="text-right font-mono font-semibold">{ZAR(c.nett)}</td>
+                        <td className="text-gray-500 text-xs">{s.responsible_agent}{s.secondary_agent ? ` / ${s.secondary_agent}` : ""}</td>
                         <td className="text-gray-500">{s.batch_num}</td>
                         <td>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
@@ -401,13 +413,14 @@ export default function ArtistDetailPage() {
                     <td></td>
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).comm, 0))}</td>
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.sound, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus1, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus2, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus3, 0))}</td>
+                    {artist.mus1_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus1, 0))}</td>}
+                    {artist.mus2_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus2, 0))}</td>}
+                    {artist.mus3_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus3, 0))}</td>}
+                    {artist.mus4_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + (r.mus4||0), 0))}</td>}
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.other_costs, 0))}</td>
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).warchest, 0))}</td>
                     <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).nett, 0))}</td>
-                    <td colSpan={4}></td>
+                    <td colSpan={5}></td>
                   </tr>
                 </tfoot>
               </table>
@@ -691,10 +704,15 @@ export default function ArtistDetailPage() {
                           onChange={() => toggleAllBatch(batchShows)}
                         />
                       </th>
-                      <th>Date</th><th>Event</th><th>Type</th>
+                      <th>Date</th><th>Event</th><th>Type</th><th>Pay</th>
                       <th className="text-right">Gross</th>
                       <th className="text-right">Comm</th>
-                      <th className="text-right">Band</th>
+                      <th className="text-right">Sound</th>
+                      {artist.mus1_name && <th className="text-right">{artist.mus1_name}</th>}
+                      {artist.mus2_name && <th className="text-right">{artist.mus2_name}</th>}
+                      {artist.mus3_name && <th className="text-right">{artist.mus3_name}</th>}
+                      {artist.mus4_name && <th className="text-right">{artist.mus4_name}</th>}
+                      <th className="text-right">Other</th>
                       <th className="text-right">WC</th>
                       <th className="text-right">Nett</th>
                       <th>Status</th>
@@ -704,8 +722,9 @@ export default function ArtistDetailPage() {
                     {batchShows.map(s => {
                       const c = calcShow(s)
                       const selected = batchSelected.has(s.id)
+                      const isEscrow = s.pay_type === "Escrow"
                       return (
-                        <tr key={s.id} className={selected ? "bg-blue-50" : ""}>
+                        <tr key={s.id} className={selected ? "bg-blue-50" : !isEscrow ? "opacity-60" : ""}>
                           <td>
                             <input
                               type="checkbox"
@@ -717,9 +736,15 @@ export default function ArtistDetailPage() {
                           <td className="text-gray-500 whitespace-nowrap">{fmtDate(s.show_date)}</td>
                           <td className="font-medium">{s.event}</td>
                           <td className="text-gray-500">{s.show_type}</td>
+                          <td className={`text-xs font-medium ${isEscrow ? "text-bblue" : "text-gray-400"}`}>{s.pay_type}</td>
                           <td className="text-right font-mono">{ZAR(s.gross)}</td>
                           <td className="text-right font-mono text-gray-600">{ZAR(c.comm)}</td>
-                          <td className="text-right font-mono text-gray-600">{ZAR(c.totalBand)}</td>
+                          <td className="text-right font-mono text-gray-600">{s.sound ? ZAR(s.sound) : "—"}</td>
+                          {artist.mus1_name && <td className="text-right font-mono text-gray-600">{s.mus1 ? ZAR(s.mus1) : "—"}</td>}
+                          {artist.mus2_name && <td className="text-right font-mono text-gray-600">{s.mus2 ? ZAR(s.mus2) : "—"}</td>}
+                          {artist.mus3_name && <td className="text-right font-mono text-gray-600">{s.mus3 ? ZAR(s.mus3) : "—"}</td>}
+                          {artist.mus4_name && <td className="text-right font-mono text-gray-600">{s.mus4 ? ZAR(s.mus4) : "—"}</td>}
+                          <td className="text-right font-mono text-gray-600">{s.other_costs ? ZAR(s.other_costs) : "—"}</td>
                           <td className="text-right font-mono text-gray-600">{ZAR(c.warchest)}</td>
                           <td className="text-right font-mono font-semibold">{ZAR(c.nett)}</td>
                           <td>

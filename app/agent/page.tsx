@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
 import type { Agent, AgentPayout, Artist, Show } from "@/lib/types"
-import { ZAR, calcAgentEarned, fmtDate as fmt } from "@/lib/calculations"
+import { ZAR, calcAgentEarned } from "@/lib/calculations"
 
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—"

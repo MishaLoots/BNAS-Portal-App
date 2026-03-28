@@ -3,8 +3,8 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
-import type { Artist, Show, Transfer, Payout } from "@/lib/types"
-import { ZAR, escrowBalance, nettOwed, totalConfirmed } from "@/lib/calculations"
+import type { Artist, Show, Transfer, Payout, Agent, AgentPayout } from "@/lib/types"
+import { ZAR, escrowBalance, nettOwed, totalConfirmed, calcAgentEarned } from "@/lib/calculations"
 
 interface ArtistRow {
   artist: Artist
@@ -13,10 +13,17 @@ interface ArtistRow {
   payouts: Payout[]
 }
 
+interface AgentRow {
+  agent: Agent
+  earned: number
+  paid: number
+}
+
 export default function AdminPage() {
   const router = useRouter()
-  const [rows, setRows]     = useState<ArtistRow[]>([])
-  const [loading, setLoading] = useState(true)
+  const [rows, setRows]         = useState<ArtistRow[]>([])
+  const [agentRows, setAgentRows] = useState<AgentRow[]>([])
+  const [loading, setLoading]   = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -29,16 +36,34 @@ export default function AdminPage() {
       const { data: artists } = await supabase.from("artists").select("*").order("name")
       if (!artists) { setLoading(false); return }
 
-      const artistRows = await Promise.all(artists.map(async (artist: Artist) => {
-        const [{ data: shows }, { data: transfers }, { data: payouts }] = await Promise.all([
-          supabase.from("shows").select("*").eq("artist_id", artist.id).order("show_date"),
-          supabase.from("transfers").select("*").eq("artist_id", artist.id).order("transfer_date"),
-          supabase.from("payouts").select("*").eq("artist_id", artist.id).order("payout_date"),
-        ])
-        return { artist, shows: shows || [], transfers: transfers || [], payouts: payouts || [] }
-      }))
+      const [artistRows, { data: agents }, { data: agentPayouts }] = await Promise.all([
+        Promise.all(artists.map(async (artist: Artist) => {
+          const [{ data: shows }, { data: transfers }, { data: payouts }] = await Promise.all([
+            supabase.from("shows").select("*").eq("artist_id", artist.id).order("show_date"),
+            supabase.from("transfers").select("*").eq("artist_id", artist.id).order("transfer_date"),
+            supabase.from("payouts").select("*").eq("artist_id", artist.id).order("payout_date"),
+          ])
+          return { artist, shows: shows || [], transfers: transfers || [], payouts: payouts || [] }
+        })),
+        supabase.from("agents").select("*").order("name"),
+        supabase.from("agent_payouts").select("*"),
+      ])
 
       setRows(artistRows)
+
+      if (agents) {
+        const computed: AgentRow[] = agents.map((agent: Agent) => {
+          const earned = artistRows.reduce((sum, { artist, shows }) => {
+            return sum + shows.reduce((s2, show) => s2 + calcAgentEarned(show, artist, agent.name), 0)
+          }, 0)
+          const paid = (agentPayouts || [])
+            .filter((p: AgentPayout) => p.agent_id === agent.id)
+            .reduce((sum: number, p: AgentPayout) => sum + p.amount, 0)
+          return { agent, earned, paid }
+        })
+        setAgentRows(computed)
+      }
+
       setLoading(false)
     }
     load()
@@ -88,6 +113,48 @@ export default function AdminPage() {
             <div className="stat-value">{ZAR(totals.confirmed)}</div>
           </div>
         </div>
+
+        {/* Agent Balances */}
+        {agentRows.length > 0 && (
+          <div className="card p-0">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="font-semibold text-navy">Agent / Management Balances</h2>
+            </div>
+            <div className="table-wrap rounded-none rounded-b-xl">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th className="text-right">Total Earned</th>
+                    <th className="text-right">Total Paid Out</th>
+                    <th className="text-right">Balance Owed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agentRows.map(({ agent, earned, paid }) => {
+                    const balance = earned - paid
+                    return (
+                      <tr key={agent.id}>
+                        <td className="font-medium">{agent.name}</td>
+                        <td className="text-right font-mono">{ZAR(earned)}</td>
+                        <td className="text-right font-mono text-gray-600">{ZAR(paid)}</td>
+                        <td className={`text-right font-mono font-semibold ${balance < 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(balance)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-lblue font-semibold">
+                    <td>TOTALS</td>
+                    <td className="text-right font-mono">{ZAR(agentRows.reduce((s, r) => s + r.earned, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(agentRows.reduce((s, r) => s + r.paid, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(agentRows.reduce((s, r) => s + r.earned - r.paid, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* Artists Table */}
         <div className="card p-0">

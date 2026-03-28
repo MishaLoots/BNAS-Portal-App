@@ -1,4 +1,4 @@
-import type { Show, Transfer, Artist } from "./types"
+import type { Show, Transfer, Artist, Agent } from "./types"
 
 export const ZAR = (n: number) =>
   "R\u00a0" + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -57,4 +57,22 @@ export function nettOwed(shows: Show[]) {
   return shows
     .filter(s => s.pay_type === "Escrow" && s.status === "All Paid")
     .reduce((sum, s) => sum + calcShow(s).nett, 0)
+}
+
+/** Agent's split % for a given artist based on their name */
+export function agentSplitPct(agentName: string, artist: Artist): number {
+  switch (agentName.toLowerCase()) {
+    case "gareth": return artist.gareth_split_pct || 0
+    case "misha":  return artist.misha_split_pct  || 0
+    case "jako":   return artist.jako_split_pct   || 0
+    case "que":    return artist.que_split_pct     || 0
+    default:       return 0
+  }
+}
+
+/** Amount agent earns from a single show */
+export function calcAgentEarned(s: Show, artist: Artist, agentName: string): number {
+  const comm    = s.gross * s.comm_pct
+  const toSplit = comm * (1 - (artist.bnas_overhead_pct || 0.2))
+  return toSplit * agentSplitPct(agentName, artist)
 }

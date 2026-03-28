@@ -12,6 +12,26 @@ export interface Artist {
   mus2_name: string
   mus3_name: string
   mus4_name: string
+  bnas_overhead_pct: number
+  gareth_split_pct: number
+  misha_split_pct: number
+  jako_split_pct: number
+  que_split_pct: number
+  unalloc_split_pct: number
+}
+
+export interface Agent {
+  id: string
+  name: string
+  email: string
+}
+
+export interface AgentPayout {
+  id: string
+  agent_id: string
+  payout_date: string
+  amount: number
+  description: string | null
 }
 
 export interface Show {
@@ -72,5 +92,6 @@ export interface Profile {
   id: string
   email: string
   artist_id: string | null
+  agent_id: string | null
   is_admin: boolean
 }

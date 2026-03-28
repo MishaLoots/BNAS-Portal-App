@@ -165,4 +165,5 @@ create policy "loans_admin" on public.loan_repayments
   for all using (public.is_admin());
 
 create policy "loans_own" on public.loan_repayments
-  for select using (artist_id = public.my_artist_id());
+  for select using (artist_id = public.my_artist_id());/Users/misha/Library/CloudStorage/GoogleDrive-mishaloots@gmail.com/My Drive/Claude Workspace/BNAS Accounting/BNAS Portal App/scripts
+cd "[paste path here]" && SUPABASE_URL=https://gkyxgallsihmvignfdku.supabase.co SUPABASE_KEY=sb_secret_5xm-BQ55geJGZy5T3mYHbw_M22yoJwI EXCEL_PATH="../../BNAS_Artist_Paybook_2026v2.xlsx" python3 migrate.py

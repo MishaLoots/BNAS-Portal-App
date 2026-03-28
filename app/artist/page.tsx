@@ -8,6 +8,12 @@ import { ZAR, calcShow, escrowBalance, nettOwed } from "@/lib/calculations"
 
 type Tab = "summary" | "shows" | "payouts"
 
+function fmtDate(s: string | null | undefined): string {
+  if (!s) return "—"
+  const d = new Date(s + "T00:00:00")
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+}
+
 export default function ArtistPage() {
   const router = useRouter()
   const [tab, setTab]             = useState<Tab>("summary")
@@ -169,7 +175,7 @@ export default function ArtistPage() {
           <div className="card p-0">
             <div className="px-6 py-4 border-b">
               <h2 className="font-semibold text-navy">Your Shows — 2026</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Read only — contact BNAS to make changes</p>
+              <p className="text-xs text-gray-500 mt-0.5">Full breakdown for your records — contact BNAS to make changes</p>
             </div>
             <div className="table-wrap rounded-none rounded-b-xl">
               <table>
@@ -177,21 +183,27 @@ export default function ArtistPage() {
                   <tr>
                     <th>Date</th><th>Event</th><th>Type</th>
                     <th className="text-right">Gross</th><th>Pay</th>
+                    <th className="text-right">Comm</th>
+                    <th className="text-right">Band</th>
+                    <th className="text-right">WC</th>
                     <th className="text-right">Nett</th>
-                    <th>Status</th><th className="text-center">Dep%</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {shows.map(s => {
-                    const { nett } = calcShow(s)
+                    const c = calcShow(s)
                     return (
                       <tr key={s.id}>
-                        <td className="text-gray-500 whitespace-nowrap">{s.show_date}</td>
+                        <td className="text-gray-500 whitespace-nowrap">{fmtDate(s.show_date)}</td>
                         <td className="font-medium">{s.event}</td>
                         <td className="text-gray-500">{s.show_type}</td>
                         <td className="text-right font-mono">{ZAR(s.gross)}</td>
                         <td className={`text-xs font-medium ${s.pay_type === "Escrow" ? "text-bblue" : "text-gray-500"}`}>{s.pay_type}</td>
-                        <td className="text-right font-mono font-semibold">{ZAR(nett)}</td>
+                        <td className="text-right font-mono text-gray-600">{ZAR(c.comm)}</td>
+                        <td className="text-right font-mono text-gray-600">{ZAR(c.totalBand)}</td>
+                        <td className="text-right font-mono text-gray-600">{ZAR(c.warchest)}</td>
+                        <td className="text-right font-mono font-semibold">{ZAR(c.nett)}</td>
                         <td>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
                             s.status === "All Paid" ? "bg-green-100 text-green-700" :
@@ -200,13 +212,22 @@ export default function ArtistPage() {
                             "bg-gray-100 text-gray-500"
                           }`}>{s.status || "—"}</span>
                         </td>
-                        <td className="text-center text-gray-500">
-                          {s.dep_is_pre ? "Pre" : s.dep_pct !== null ? `${s.dep_pct}%` : "—"}
-                        </td>
                       </tr>
                     )
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-lblue font-semibold">
+                    <td colSpan={3}>TOTALS</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.gross, 0))}</td>
+                    <td></td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).comm, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).totalBand, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).warchest, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).nett, 0))}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -222,7 +243,7 @@ export default function ArtistPage() {
                   <div key={p.id} className="flex items-center justify-between bg-white rounded-lg p-4 border border-yellow-200">
                     <div>
                       <div className="font-medium">{ZAR(p.amount)}</div>
-                      <div className="text-sm text-gray-500">Batch {p.batch_ref} · {p.payout_date}</div>
+                      <div className="text-sm text-gray-500">Batch {p.batch_ref} · {fmtDate(p.payout_date)}</div>
                       {p.notes && <div className="text-xs text-gray-400 mt-0.5">{p.notes}</div>}
                     </div>
                     <button
@@ -247,7 +268,7 @@ export default function ArtistPage() {
                   <tbody>
                     {payouts.map(p => (
                       <tr key={p.id}>
-                        <td className="whitespace-nowrap">{p.payout_date}</td>
+                        <td className="whitespace-nowrap">{fmtDate(p.payout_date)}</td>
                         <td>{p.batch_ref}</td>
                         <td className="text-right font-mono font-semibold">{ZAR(p.amount)}</td>
                         <td className="text-gray-500">{p.notes}</td>

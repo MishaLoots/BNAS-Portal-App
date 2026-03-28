@@ -31,7 +31,11 @@ def d(val):
 def to_date(val):
     if val is None: return None
     if isinstance(val, (datetime, date)): return val.strftime("%Y-%m-%d")
-    return str(val)[:10]
+    s = str(val).strip()
+    # Try DD-Mon-YY format e.g. "02-Feb-26"
+    try: return datetime.strptime(s, "%d-%b-%y").strftime("%Y-%m-%d")
+    except: pass
+    return s[:10]
 
 def dep_values(raw):
     """Convert Y/N/Pre/0-100 dep value → (dep_pct, dep_is_pre)."""
@@ -127,7 +131,12 @@ for artist_name, sheet_name in SHEET_MAP.items():
 
     for r in range(DS, DE + 1):
         gross = ws.cell(r, 4).value
+        date_val = ws.cell(r, 1).value
+        if artist_name == "Pedro Barbosa" and r <= 15:
+            print(f"    DEBUG row {r}: date={repr(date_val)} gross={repr(gross)}")
         if not gross: continue
+        # Skip non-date rows (e.g. "TOTALS" summary rows)
+        if isinstance(date_val, str) and date_val.strip().upper() == "TOTALS": continue
 
         dep_raw = ws.cell(r, 19 if artist_name in ("Saxby Twins","Anzo") else 19).value
         # Column mapping (matches V2 structure):

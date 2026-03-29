@@ -4,9 +4,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        navy:  "#1F3864",
-        bblue: "#2E75B6",
-        lblue: "#BDD7EE",
+        navy:  "#1A1A2E",
+        bblue: "#E94560",
+        lblue: "#FDEAED",
+        dmid:  "#0E2841",
+        steel: "#156082",
       },
     },
   },

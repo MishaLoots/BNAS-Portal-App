@@ -12,10 +12,12 @@ body { @apply bg-gray-50 text-gray-900; }
 
 .table-wrap { @apply overflow-x-auto rounded-xl border border-gray-200; }
 table  { @apply w-full text-sm; }
-thead  { @apply bg-lblue; }
-th     { @apply px-3 py-2 text-left font-semibold text-navy text-xs; }
+thead  { @apply bg-navy; }
+th     { @apply px-3 py-2 text-left font-semibold text-white text-xs uppercase tracking-wide; }
 td     { @apply px-3 py-2 border-t border-gray-100; }
-tr:hover td { @apply bg-blue-50; }
+tr:hover td { @apply bg-lblue; }
+
+tfoot tr td { @apply bg-lblue font-semibold text-navy; }
 
 .stat-card { @apply card flex flex-col gap-1; }
 .stat-label { @apply text-xs text-gray-500 uppercase tracking-wide; }

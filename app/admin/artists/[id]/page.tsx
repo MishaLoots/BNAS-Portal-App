@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
-import type { Artist, Show, Transfer, Payout, LoanRepayment } from "@/lib/types"
+import type { Artist, Show, Transfer, Payout, LoanRepayment, Batch } from "@/lib/types"
 import { ZAR, calcShow, escrowBalance, nettOwed } from "@/lib/calculations"
 
 type Tab = "shows" | "escrow" | "payouts" | "loan" | "batch"
@@ -59,16 +59,19 @@ export default function ArtistDetailPage() {
   // Batch calculator
   const [batchSelected, setBatchSelected] = useState<Set<string>>(new Set())
   const [batchSaving, setBatchSaving]     = useState(false)
+  const [batchNumInput, setBatchNumInput] = useState("")
+  const [batches, setBatches]             = useState<Batch[]>([])
 
   async function load() {
-    const [{ data: a }, { data: s }, { data: t }, { data: p }, { data: l }] = await Promise.all([
+    const [{ data: a }, { data: s }, { data: t }, { data: p }, { data: l }, { data: b }] = await Promise.all([
       supabase.from("artists").select("*").eq("id", id).single(),
       supabase.from("shows").select("*").eq("artist_id", id).order("show_date"),
       supabase.from("transfers").select("*").eq("artist_id", id).order("transfer_date"),
       supabase.from("payouts").select("*").eq("artist_id", id).order("payout_date"),
       supabase.from("loan_repayments").select("*").eq("artist_id", id).order("repayment_date"),
+      supabase.from("batches").select("*").eq("artist_id", id).order("created_at", { ascending: false }),
     ])
-    setArtist(a); setShows(s || []); setTransfers(t || []); setPayouts(p || []); setLoans(l || [])
+    setArtist(a); setShows(s || []); setTransfers(t || []); setPayouts(p || []); setLoans(l || []); setBatches(b || [])
     setLoading(false)
   }
 
@@ -206,16 +209,36 @@ export default function ArtistDetailPage() {
     }
   }
 
-  async function markBatchAllPaid() {
-    if (batchSelected.size === 0) return
-    if (!window.confirm(`Mark ${batchSelected.size} show(s) as "All Paid"?`)) return
+  async function assignBatch() {
+    if (batchSelected.size === 0 || !batchNumInput.trim()) return
+    if (!window.confirm(`Assign batch "${batchNumInput}" to ${batchSelected.size} show(s) and send for artist sign-off?`)) return
     setBatchSaving(true)
+    const selectedShows = batchShows.filter(s => batchSelected.has(s.id))
+    const totalGross = selectedShows.reduce((s, sh) => s + sh.gross, 0)
+    const totalNett  = selectedShows.reduce((s, sh) => s + calcShow(sh).nett, 0)
     await supabase.from("shows")
-      .update({ status: "All Paid" })
+      .update({ batch_num: batchNumInput.trim() })
       .in("id", Array.from(batchSelected))
+    await supabase.from("batches").insert({
+      artist_id: id,
+      batch_num: batchNumInput.trim(),
+      total_gross: totalGross,
+      total_nett: totalNett,
+      status: "Pending Sign-Off",
+    })
     setBatchSelected(new Set())
+    setBatchNumInput("")
     await load()
     setBatchSaving(false)
+  }
+
+  async function markBatchPaid(batchId: string) {
+    if (!window.confirm("Mark this batch as Paid? This will set all shows in the batch to 'All Paid'.")) return
+    const batch = batches.find(b => b.id === batchId)
+    if (!batch) return
+    await supabase.from("batches").update({ status: "Paid", paid_at: new Date().toISOString() }).eq("id", batchId)
+    await supabase.from("shows").update({ status: "All Paid" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    await load()
   }
 
   if (loading || !artist) return (
@@ -651,16 +674,24 @@ export default function ArtistDetailPage() {
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h2 className="font-semibold text-navy">Batch Calculator</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">Select shows to calculate payout totals</p>
+                  <p className="text-sm text-gray-500 mt-0.5">Select shows, assign a batch number, and send for artist sign-off</p>
                 </div>
                 {batchSelected.size > 0 && (
-                  <button
-                    onClick={markBatchAllPaid}
-                    disabled={batchSaving}
-                    className="btn-primary"
-                  >
-                    {batchSaving ? "Saving…" : `Mark ${batchSelected.size} as "All Paid"`}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="w-32"
+                      placeholder="Batch # e.g. B004"
+                      value={batchNumInput}
+                      onChange={e => setBatchNumInput(e.target.value)}
+                    />
+                    <button
+                      onClick={assignBatch}
+                      disabled={batchSaving || !batchNumInput.trim()}
+                      className="btn-primary"
+                    >
+                      {batchSaving ? "Saving…" : `Assign Batch (${batchSelected.size})`}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -762,6 +793,56 @@ export default function ArtistDetailPage() {
                 </table>
               </div>
             </div>
+
+            {/* Existing batches */}
+            {batches.length > 0 && (
+              <div className="card p-0">
+                <div className="px-6 py-4 border-b border-gray-100">
+                  <h3 className="font-semibold text-navy">Batch History</h3>
+                </div>
+                <div className="table-wrap rounded-none rounded-b-xl">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Batch #</th>
+                        <th>Created</th>
+                        <th className="text-right">Gross</th>
+                        <th className="text-right">Nett</th>
+                        <th>Status</th>
+                        <th>Signed Off</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batches.map(b => (
+                        <tr key={b.id}>
+                          <td className="font-medium">{b.batch_num}</td>
+                          <td className="text-gray-500">{fmtDate(b.created_at)}</td>
+                          <td className="text-right font-mono">{ZAR(b.total_gross)}</td>
+                          <td className="text-right font-mono font-semibold">{ZAR(b.total_nett)}</td>
+                          <td>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              b.status === "Paid"           ? "bg-green-100 text-green-700" :
+                              b.status === "Signed Off"     ? "bg-blue-100 text-blue-700" :
+                              b.status === "Pending Sign-Off" ? "bg-yellow-100 text-yellow-700" :
+                              "bg-gray-100 text-gray-500"
+                            }`}>{b.status}</span>
+                          </td>
+                          <td className="text-gray-500 text-xs">{b.signed_off_at ? fmtDate(b.signed_off_at) : "—"}</td>
+                          <td>
+                            {b.status === "Signed Off" && (
+                              <button onClick={() => markBatchPaid(b.id)} className="text-xs text-green-700 font-medium hover:underline">
+                                Mark Paid
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -32,6 +32,7 @@ export interface AgentPayout {
   payout_date: string
   amount: number
   description: string | null
+  payout_type: string | null
 }
 
 export interface Show {
@@ -86,6 +87,18 @@ export interface LoanRepayment {
   description: string
   amount: number
   notes: string | null
+}
+
+export interface Batch {
+  id: string
+  artist_id: string
+  batch_num: string
+  total_gross: number
+  total_nett: number
+  status: string
+  created_at: string
+  signed_off_at: string | null
+  paid_at: string | null
 }
 
 export interface Profile {

@@ -3,10 +3,10 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
-import type { Artist, Show, Transfer, Payout } from "@/lib/types"
+import type { Artist, Show, Transfer, Payout, Batch } from "@/lib/types"
 import { ZAR, calcShow, escrowBalance, nettOwed } from "@/lib/calculations"
 
-type Tab = "summary" | "shows" | "payouts"
+type Tab = "summary" | "shows" | "payouts" | "approvals"
 
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—"
@@ -21,8 +21,10 @@ export default function ArtistPage() {
   const [shows, setShows]         = useState<Show[]>([])
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [payouts, setPayouts]     = useState<Payout[]>([])
+  const [batches, setBatches]     = useState<Batch[]>([])
   const [loading, setLoading]     = useState(true)
   const [approving, setApproving] = useState<string | null>(null)
+  const [signingOff, setSigningOff] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -36,17 +38,31 @@ export default function ArtistPage() {
       if (!profile?.artist_id) { setLoading(false); return }
 
       const aid = profile.artist_id
-      const [{ data: a }, { data: s }, { data: t }, { data: p }] = await Promise.all([
+      const [{ data: a }, { data: s }, { data: t }, { data: p }, { data: b }] = await Promise.all([
         supabase.from("artists").select("*").eq("id", aid).single(),
         supabase.from("shows").select("*").eq("artist_id", aid).order("show_date"),
         supabase.from("transfers").select("*").eq("artist_id", aid).order("transfer_date"),
         supabase.from("payouts").select("*").eq("artist_id", aid).order("payout_date"),
+        supabase.from("batches").select("*").eq("artist_id", aid).order("created_at", { ascending: false }),
       ])
-      setArtist(a); setShows(s || []); setTransfers(t || []); setPayouts(p || [])
+      setArtist(a); setShows(s || []); setTransfers(t || []); setPayouts(p || []); setBatches(b || [])
       setLoading(false)
     }
     load()
   }, [router])
+
+  async function signOffBatch(batchId: string) {
+    setSigningOff(batchId)
+    await supabase.from("batches").update({
+      status: "Signed Off",
+      signed_off_at: new Date().toISOString(),
+    }).eq("id", batchId)
+    setBatches(bs => bs.map(b => b.id === batchId
+      ? { ...b, status: "Signed Off", signed_off_at: new Date().toISOString() }
+      : b
+    ))
+    setSigningOff(null)
+  }
 
   async function approvePayout(id: string) {
     setApproving(id)
@@ -78,16 +94,25 @@ export default function ArtistPage() {
   const paid = payouts.reduce((s, p) => s + p.amount, 0)
   const owed = nettOwed(shows)
   const due  = owed - paid
-  const pendingPayouts = payouts.filter(p => !p.approved_by_artist)
+  const pendingPayouts  = payouts.filter(p => !p.approved_by_artist)
+  const pendingBatches  = batches.filter(b => b.status === "Pending Sign-Off")
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar title={artist.name} isAdmin={false} />
 
-      {pendingPayouts.length > 0 && (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 text-sm text-yellow-800">
-          ⚠ You have <strong>{pendingPayouts.length}</strong> payout{pendingPayouts.length > 1 ? "s" : ""} awaiting your approval —{" "}
-          <button onClick={() => setTab("payouts")} className="underline font-medium">review now</button>
+      {(pendingBatches.length > 0 || pendingPayouts.length > 0) && (
+        <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-3 text-sm text-yellow-800 flex gap-4 flex-wrap">
+          {pendingBatches.length > 0 && (
+            <span>⚠ <strong>{pendingBatches.length}</strong> batch{pendingBatches.length > 1 ? "es" : ""} awaiting sign-off —{" "}
+              <button onClick={() => setTab("approvals")} className="underline font-medium">sign off now</button>
+            </span>
+          )}
+          {pendingPayouts.length > 0 && (
+            <span>⚠ <strong>{pendingPayouts.length}</strong> payout{pendingPayouts.length > 1 ? "s" : ""} awaiting approval —{" "}
+              <button onClick={() => setTab("payouts")} className="underline font-medium">review now</button>
+            </span>
+          )}
         </div>
       )}
 
@@ -95,7 +120,7 @@ export default function ArtistPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-          {(["summary","shows","payouts"] as Tab[]).map(t => (
+          {(["summary","shows","payouts","approvals"] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
                 tab === t ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -304,6 +329,71 @@ export default function ArtistPage() {
                   </tfoot>
                 </table>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── APPROVALS ── */}
+        {tab === "approvals" && (
+          <div className="space-y-4">
+            <div className="card p-0">
+              <div className="px-6 py-4 border-b border-gray-100">
+                <h2 className="font-semibold text-navy">Batch Sign-Offs</h2>
+                <p className="text-sm text-gray-500 mt-0.5">Review each batch and sign off to confirm the breakdown is correct</p>
+              </div>
+              {batches.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-400 text-sm">No batches yet</div>
+              ) : (
+                <div className="table-wrap rounded-none rounded-b-xl">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Batch #</th>
+                        <th>Date</th>
+                        <th className="text-right">Gross</th>
+                        <th className="text-right">Nett to You</th>
+                        <th>Status</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batches.map(b => (
+                        <tr key={b.id}>
+                          <td className="font-medium">{b.batch_num}</td>
+                          <td className="text-gray-500">{fmtDate(b.created_at)}</td>
+                          <td className="text-right font-mono">{ZAR(b.total_gross)}</td>
+                          <td className="text-right font-mono font-semibold">{ZAR(b.total_nett)}</td>
+                          <td>
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              b.status === "Paid"             ? "bg-green-100 text-green-700" :
+                              b.status === "Signed Off"       ? "bg-blue-100 text-blue-700" :
+                              b.status === "Pending Sign-Off" ? "bg-yellow-100 text-yellow-700" :
+                              "bg-gray-100 text-gray-500"
+                            }`}>{b.status}</span>
+                          </td>
+                          <td>
+                            {b.status === "Pending Sign-Off" && (
+                              <button
+                                onClick={() => signOffBatch(b.id)}
+                                disabled={signingOff === b.id}
+                                className="btn-primary text-xs py-1"
+                              >
+                                {signingOff === b.id ? "Signing…" : "Sign Off"}
+                              </button>
+                            )}
+                            {b.status === "Signed Off" && (
+                              <span className="text-xs text-blue-600">Signed {fmtDate(b.signed_off_at)}</span>
+                            )}
+                            {b.status === "Paid" && (
+                              <span className="text-xs text-green-600">Paid {fmtDate(b.paid_at)}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}

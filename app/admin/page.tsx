@@ -17,57 +17,92 @@ interface AgentRow {
   agent: Agent
   earned: number
   paid: number
+  payouts: AgentPayout[]
+}
+
+const PAYOUT_TYPES = ["Payout", "Advance", "Expense Reimbursement", "Other"]
+
+function fmtDate(s: string | null | undefined): string {
+  if (!s) return "—"
+  return new Date(s + (s.length === 10 ? "T00:00:00" : "")).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
 }
 
 export default function AdminPage() {
   const router = useRouter()
-  const [rows, setRows]         = useState<ArtistRow[]>([])
+  const [rows, setRows]           = useState<ArtistRow[]>([])
   const [agentRows, setAgentRows] = useState<AgentRow[]>([])
-  const [loading, setLoading]   = useState(true)
+  const [loading, setLoading]     = useState(true)
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
+  const [editingPayout, setEditingPayout] = useState<AgentPayout | null>(null)
+  const [payoutForm, setPayoutForm] = useState<{ agent_id: string; payout_date: string; amount: string; payout_type: string; description: string } | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    async function load() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.replace("/login"); return }
+  async function load() {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { router.replace("/login"); return }
 
-      const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", session.user.id).single()
-      if (!profile?.is_admin) { router.replace("/artist"); return }
+    const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", session.user.id).single()
+    if (!profile?.is_admin) { router.replace("/artist"); return }
 
-      const { data: artists } = await supabase.from("artists").select("*").order("name")
-      if (!artists) { setLoading(false); return }
+    const { data: artists } = await supabase.from("artists").select("*").order("name")
+    if (!artists) { setLoading(false); return }
 
-      const [artistRows, { data: agents }, { data: agentPayouts }] = await Promise.all([
-        Promise.all(artists.map(async (artist: Artist) => {
-          const [{ data: shows }, { data: transfers }, { data: payouts }] = await Promise.all([
-            supabase.from("shows").select("*").eq("artist_id", artist.id).order("show_date"),
-            supabase.from("transfers").select("*").eq("artist_id", artist.id).order("transfer_date"),
-            supabase.from("payouts").select("*").eq("artist_id", artist.id).order("payout_date"),
-          ])
-          return { artist, shows: shows || [], transfers: transfers || [], payouts: payouts || [] }
-        })),
-        supabase.from("agents").select("*").order("name"),
-        supabase.from("agent_payouts").select("*"),
-      ])
+    const [artistRows, { data: agents }, { data: agentPayouts }] = await Promise.all([
+      Promise.all(artists.map(async (artist: Artist) => {
+        const [{ data: shows }, { data: transfers }, { data: payouts }] = await Promise.all([
+          supabase.from("shows").select("*").eq("artist_id", artist.id).order("show_date"),
+          supabase.from("transfers").select("*").eq("artist_id", artist.id).order("transfer_date"),
+          supabase.from("payouts").select("*").eq("artist_id", artist.id).order("payout_date"),
+        ])
+        return { artist, shows: shows || [], transfers: transfers || [], payouts: payouts || [] }
+      })),
+      supabase.from("agents").select("*").order("name"),
+      supabase.from("agent_payouts").select("*").order("payout_date", { ascending: false }),
+    ])
 
-      setRows(artistRows)
+    setRows(artistRows)
 
-      if (agents) {
-        const computed: AgentRow[] = agents.map((agent: Agent) => {
-          const earned = artistRows.reduce((sum, { artist, shows }) => {
-            return sum + shows.reduce((s2, show) => s2 + calcAgentEarned(show, artist, agent.name), 0)
-          }, 0)
-          const paid = (agentPayouts || [])
-            .filter((p: AgentPayout) => p.agent_id === agent.id)
-            .reduce((sum: number, p: AgentPayout) => sum + p.amount, 0)
-          return { agent, earned, paid }
-        })
-        setAgentRows(computed)
-      }
-
-      setLoading(false)
+    if (agents) {
+      const computed: AgentRow[] = agents.map((agent: Agent) => {
+        const myPayouts = (agentPayouts || []).filter((p: AgentPayout) => p.agent_id === agent.id)
+        const earned = artistRows.reduce((sum, { artist, shows }) => {
+          return sum + shows.reduce((s2, show) => s2 + calcAgentEarned(show, artist, agent.name), 0)
+        }, 0)
+        const paid = myPayouts.reduce((sum: number, p: AgentPayout) => sum + p.amount, 0)
+        return { agent, earned, paid, payouts: myPayouts }
+      })
+      setAgentRows(computed)
     }
-    load()
-  }, [router])
+
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [router])
+
+  async function saveAgentPayout() {
+    if (!payoutForm) return
+    setSaving(true)
+    const data = { agent_id: payoutForm.agent_id, payout_date: payoutForm.payout_date, amount: parseFloat(payoutForm.amount) || 0, payout_type: payoutForm.payout_type, description: payoutForm.description || null }
+    if (editingPayout) {
+      await supabase.from("agent_payouts").update(data).eq("id", editingPayout.id)
+    } else {
+      await supabase.from("agent_payouts").insert(data)
+    }
+    setPayoutForm(null); setEditingPayout(null)
+    await load(); setSaving(false)
+  }
+
+  async function deleteAgentPayout(id: string) {
+    if (!window.confirm("Delete this payout entry?")) return
+    await supabase.from("agent_payouts").delete().eq("id", id)
+    await load()
+  }
+
+  function startEditPayout(p: AgentPayout) {
+    setEditingPayout(p)
+    setExpandedAgent(p.agent_id)
+    setPayoutForm({ agent_id: p.agent_id, payout_date: p.payout_date, amount: String(p.amount), payout_type: p.payout_type || "Payout", description: p.description || "" })
+  }
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-gray-400">Loading…</div>
@@ -114,13 +149,13 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Agent Balances */}
+        {/* Agent Balances + Payout Log */}
         {agentRows.length > 0 && (
           <div className="card p-0">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-navy">Agent / Management Balances</h2>
             </div>
-            <div className="table-wrap rounded-none rounded-b-xl">
+            <div className="table-wrap rounded-none">
               <table>
                 <thead>
                   <tr>
@@ -128,17 +163,31 @@ export default function AdminPage() {
                     <th className="text-right">Total Earned</th>
                     <th className="text-right">Total Paid Out</th>
                     <th className="text-right">Balance Owed</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {agentRows.map(({ agent, earned, paid }) => {
                     const balance = earned - paid
+                    const isExpanded = expandedAgent === agent.id
                     return (
                       <tr key={agent.id}>
                         <td className="font-medium">{agent.name}</td>
                         <td className="text-right font-mono">{ZAR(earned)}</td>
                         <td className="text-right font-mono text-gray-600">{ZAR(paid)}</td>
                         <td className={`text-right font-mono font-semibold ${balance < 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(balance)}</td>
+                        <td>
+                          <button
+                            onClick={() => {
+                              setExpandedAgent(isExpanded ? null : agent.id)
+                              setPayoutForm(isExpanded ? null : null)
+                              setEditingPayout(null)
+                            }}
+                            className="text-xs text-bblue hover:text-navy font-medium"
+                          >
+                            {isExpanded ? "Close" : "Manage ↓"}
+                          </button>
+                        </td>
                       </tr>
                     )
                   })}
@@ -149,10 +198,73 @@ export default function AdminPage() {
                     <td className="text-right font-mono">{ZAR(agentRows.reduce((s, r) => s + r.earned, 0))}</td>
                     <td className="text-right font-mono">{ZAR(agentRows.reduce((s, r) => s + r.paid, 0))}</td>
                     <td className="text-right font-mono">{ZAR(agentRows.reduce((s, r) => s + r.earned - r.paid, 0))}</td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>
             </div>
+
+            {/* Expanded payout log */}
+            {expandedAgent && (() => {
+              const row = agentRows.find(r => r.agent.id === expandedAgent)
+              if (!row) return null
+              return (
+                <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-navy text-sm">{row.agent.name} — Payout Log</h3>
+                    {!payoutForm && (
+                      <button
+                        onClick={() => setPayoutForm({ agent_id: row.agent.id, payout_date: "", amount: "", payout_type: "Payout", description: "" })}
+                        className="btn-primary text-xs py-1"
+                      >
+                        + Log Payment
+                      </button>
+                    )}
+                  </div>
+
+                  {payoutForm && payoutForm.agent_id === row.agent.id && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      <div><label>Date</label><input type="date" value={payoutForm.payout_date} onChange={e => setPayoutForm(f => f ? { ...f, payout_date: e.target.value } : f)} /></div>
+                      <div><label>Type</label><select value={payoutForm.payout_type} onChange={e => setPayoutForm(f => f ? { ...f, payout_type: e.target.value } : f)}>{PAYOUT_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
+                      <div><label>Amount</label><input type="number" placeholder="0" value={payoutForm.amount} onChange={e => setPayoutForm(f => f ? { ...f, amount: e.target.value } : f)} /></div>
+                      <div className="sm:col-span-2"><label>Description</label><input placeholder="Optional note" value={payoutForm.description} onChange={e => setPayoutForm(f => f ? { ...f, description: e.target.value } : f)} /></div>
+                      <div className="sm:col-span-5 flex gap-2">
+                        <button onClick={saveAgentPayout} disabled={saving} className="btn-primary text-xs py-1">{saving ? "Saving…" : editingPayout ? "Update" : "Save"}</button>
+                        <button onClick={() => { setPayoutForm(null); setEditingPayout(null) }} className="btn-ghost text-xs py-1">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {row.payouts.length === 0 ? (
+                    <p className="text-sm text-gray-400">No payments logged yet</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead><tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                        <th className="pb-1 font-medium">Date</th>
+                        <th className="pb-1 font-medium">Type</th>
+                        <th className="pb-1 font-medium text-right">Amount</th>
+                        <th className="pb-1 font-medium">Description</th>
+                        <th></th>
+                      </tr></thead>
+                      <tbody>
+                        {row.payouts.map(p => (
+                          <tr key={p.id} className="border-b border-gray-100">
+                            <td className="py-1.5 text-gray-600">{fmtDate(p.payout_date)}</td>
+                            <td className="py-1.5 text-gray-600">{p.payout_type || "Payout"}</td>
+                            <td className="py-1.5 text-right font-mono font-semibold">{ZAR(p.amount)}</td>
+                            <td className="py-1.5 text-gray-500">{p.description || "—"}</td>
+                            <td className="py-1.5 text-right">
+                              <button onClick={() => startEditPayout(p)} className="text-xs text-bblue hover:underline mr-2">Edit</button>
+                              <button onClick={() => deleteAgentPayout(p.id)} className="text-xs text-red-500 hover:underline">Del</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )}
 

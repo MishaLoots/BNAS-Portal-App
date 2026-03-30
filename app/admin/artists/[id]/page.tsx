@@ -54,7 +54,7 @@ export default function ArtistDetailPage() {
 
   // Loan entry form
   const [loanForm, setLoanForm] = useState(false)
-  const [newLoan, setNewLoan]   = useState({ date: "", type: "Repayment", amount: "", description: "" })
+  const [newLoan, setNewLoan]   = useState({ date: "", type: "Repayment", amount: "", description: "", notes: "" })
 
   // Batch calculator
   const [batchSelected, setBatchSelected] = useState<Set<string>>(new Set())
@@ -173,6 +173,7 @@ export default function ArtistDetailPage() {
         repayment_date: newLoan.date,
         amount: amt,
         description: newLoan.description,
+        notes: newLoan.notes || null,
       })
     } else {
       // Additional loan — increase opening balance
@@ -181,7 +182,7 @@ export default function ArtistDetailPage() {
     }
     await load()
     setLoanForm(false)
-    setNewLoan({ date: "", type: "Repayment", amount: "", description: "" })
+    setNewLoan({ date: "", type: "Repayment", amount: "", description: "", notes: "" })
     setSaving(false)
   }
 
@@ -214,17 +215,43 @@ export default function ArtistDetailPage() {
     if (!window.confirm(`Assign batch "${batchNumInput}" to ${batchSelected.size} show(s) and send for artist sign-off?`)) return
     setBatchSaving(true)
     const selectedShows = batchShows.filter(s => batchSelected.has(s.id))
-    const totalGross = selectedShows.reduce((s, sh) => s + sh.gross, 0)
-    const totalNett  = selectedShows.reduce((s, sh) => s + calcShow(sh).nett, 0)
+    const totals = selectedShows.reduce((acc, sh) => {
+      const c = calcShow(sh)
+      return {
+        gross:    acc.gross    + sh.gross,
+        comm:     acc.comm     + c.comm,
+        sound:    acc.sound    + sh.sound,
+        mus1:     acc.mus1     + sh.mus1,
+        mus2:     acc.mus2     + sh.mus2,
+        mus3:     acc.mus3     + sh.mus3,
+        mus4:     acc.mus4     + (sh.mus4 || 0),
+        other:    acc.other    + sh.other_costs,
+        warchest: acc.warchest + c.warchest,
+        nett:     acc.nett     + c.nett,
+      }
+    }, { gross: 0, comm: 0, sound: 0, mus1: 0, mus2: 0, mus3: 0, mus4: 0, other: 0, warchest: 0, nett: 0 })
+
     await supabase.from("shows")
       .update({ batch_num: batchNumInput.trim() })
       .in("id", Array.from(batchSelected))
     await supabase.from("batches").insert({
-      artist_id: id,
-      batch_num: batchNumInput.trim(),
-      total_gross: totalGross,
-      total_nett: totalNett,
-      status: "Pending Sign-Off",
+      artist_id:     id,
+      batch_num:     batchNumInput.trim(),
+      total_gross:   totals.gross,
+      total_comm:    totals.comm,
+      total_sound:   totals.sound,
+      total_mus1:    totals.mus1,
+      total_mus2:    totals.mus2,
+      total_mus3:    totals.mus3,
+      total_mus4:    totals.mus4,
+      total_other:   totals.other,
+      total_warchest: totals.warchest,
+      total_nett:    totals.nett,
+      mus1_name:     artist?.mus1_name || null,
+      mus2_name:     artist?.mus2_name || null,
+      mus3_name:     artist?.mus3_name || null,
+      mus4_name:     artist?.mus4_name || null,
+      status:        "Pending Sign-Off",
     })
     setBatchSelected(new Set())
     setBatchNumInput("")
@@ -232,12 +259,31 @@ export default function ArtistDetailPage() {
     setBatchSaving(false)
   }
 
+  async function approveOnBehalf(batchId: string) {
+    if (!window.confirm("Approve this batch on behalf of the artist?")) return
+    await supabase.from("batches").update({
+      status: "Signed Off",
+      signed_off_at: new Date().toISOString(),
+      approved_by: "admin",
+    }).eq("id", batchId)
+    await load()
+  }
+
   async function markBatchPaid(batchId: string) {
-    if (!window.confirm("Mark this batch as Paid? This will set all shows in the batch to 'All Paid'.")) return
+    if (!window.confirm("Mark this batch as Paid? This will set all shows to 'All Paid' and log the payout.")) return
     const batch = batches.find(b => b.id === batchId)
     if (!batch) return
     await supabase.from("batches").update({ status: "Paid", paid_at: new Date().toISOString() }).eq("id", batchId)
     await supabase.from("shows").update({ status: "All Paid" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    await supabase.from("payouts").insert({
+      artist_id: id,
+      payout_date: new Date().toISOString().slice(0, 10),
+      batch_ref: batch.batch_num,
+      amount: batch.total_nett,
+      notes: `Batch ${batch.batch_num} paid`,
+      approved_by_artist: true,
+      approved_at: batch.signed_off_at || new Date().toISOString(),
+    })
     await load()
   }
 
@@ -543,6 +589,42 @@ export default function ArtistDetailPage() {
               <div className="stat-card"><div className="stat-label">Balance Due</div><div className={`stat-value text-xl ${due < 0 ? "text-red-600" : ""}`}>{ZAR(due)}</div></div>
             </div>
 
+            {/* Approved batches ready to pay */}
+            {batches.filter(b => b.status === "Signed Off").length > 0 && (
+              <div className="card p-0 border-green-200">
+                <div className="px-6 py-3 bg-green-50 border-b border-green-200 rounded-t-xl">
+                  <h3 className="font-semibold text-green-800">Ready to Pay</h3>
+                </div>
+                {batches.filter(b => b.status === "Signed Off").map(b => (
+                  <div key={b.id} className="px-6 py-4 border-b last:border-0">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <span className="font-semibold text-navy">{b.batch_num}</span>
+                        <span className="ml-2 text-xs text-gray-500">
+                          {b.approved_by === "admin" ? "Admin approved" : "Artist signed off"} · {fmtDate(b.signed_off_at)}
+                        </span>
+                      </div>
+                      <button onClick={() => markBatchPaid(b.id)} className="btn-success text-xs py-1">
+                        Mark All Paid
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm bg-gray-50 rounded-lg p-3">
+                      <div><div className="text-xs text-gray-500">Gross</div><div className="font-mono">{ZAR(b.total_gross)}</div></div>
+                      <div><div className="text-xs text-gray-500">Commission</div><div className="font-mono text-red-600">({ZAR(b.total_comm)})</div></div>
+                      {b.total_sound > 0 && <div><div className="text-xs text-gray-500">Sound</div><div className="font-mono text-red-600">({ZAR(b.total_sound)})</div></div>}
+                      {(b.mus1_name && b.total_mus1 > 0) && <div><div className="text-xs text-gray-500">{b.mus1_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus1)})</div></div>}
+                      {(b.mus2_name && b.total_mus2 > 0) && <div><div className="text-xs text-gray-500">{b.mus2_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus2)})</div></div>}
+                      {(b.mus3_name && b.total_mus3 > 0) && <div><div className="text-xs text-gray-500">{b.mus3_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus3)})</div></div>}
+                      {(b.mus4_name && b.total_mus4 > 0) && <div><div className="text-xs text-gray-500">{b.mus4_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus4)})</div></div>}
+                      {b.total_other > 0 && <div><div className="text-xs text-gray-500">Other</div><div className="font-mono text-red-600">({ZAR(b.total_other)})</div></div>}
+                      {b.total_warchest > 0 && <div><div className="text-xs text-gray-500">Warchest</div><div className="font-mono text-red-600">({ZAR(b.total_warchest)})</div></div>}
+                      <div className="border-l pl-3"><div className="text-xs text-gray-500">Nett to Artist</div><div className="font-mono font-bold text-green-700">{ZAR(b.total_nett)}</div></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="card p-0">
               <div className="px-6 py-4 border-b flex justify-between items-center">
                 <h2 className="font-semibold text-navy">Payout Log</h2>
@@ -631,6 +713,10 @@ export default function ArtistDetailPage() {
                   <input value={newLoan.description} onChange={e => setNewLoan(l => ({ ...l, description: e.target.value }))} />
                 </div>
                 <div className="col-span-2">
+                  <label>Notes</label>
+                  <input placeholder="Optional notes" value={newLoan.notes} onChange={e => setNewLoan(l => ({ ...l, notes: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
                   <button onClick={addLoanEntry} disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save Entry"}</button>
                 </div>
               </div>
@@ -652,12 +738,13 @@ export default function ArtistDetailPage() {
             </div>
             {loans.length > 0 && (
               <table className="w-full text-sm">
-                <thead><tr><th className="text-left py-1">Date</th><th className="text-left py-1">Description</th><th className="text-right py-1">Amount</th></tr></thead>
+                <thead><tr><th className="text-left py-1">Date</th><th className="text-left py-1">Description</th><th className="text-left py-1">Notes</th><th className="text-right py-1">Amount</th></tr></thead>
                 <tbody>
                   {loans.map(l => (
                     <tr key={l.id} className="border-t">
-                      <td className="py-1 text-gray-500">{fmtDate(l.repayment_date)}</td>
+                      <td className="py-1 text-gray-500 whitespace-nowrap">{fmtDate(l.repayment_date)}</td>
                       <td className="py-1">{l.description}</td>
+                      <td className="py-1 text-gray-400 text-xs">{l.notes || "—"}</td>
                       <td className="py-1 text-right font-mono text-green-700">{ZAR(l.amount)}</td>
                     </tr>
                   ))}
@@ -829,7 +916,12 @@ export default function ArtistDetailPage() {
                             }`}>{b.status}</span>
                           </td>
                           <td className="text-gray-500 text-xs">{b.signed_off_at ? fmtDate(b.signed_off_at) : "—"}</td>
-                          <td>
+                          <td className="space-x-2">
+                            {b.status === "Pending Sign-Off" && (
+                              <button onClick={() => approveOnBehalf(b.id)} className="text-xs text-bblue font-medium hover:underline">
+                                Approve on Behalf
+                              </button>
+                            )}
                             {b.status === "Signed Off" && (
                               <button onClick={() => markBatchPaid(b.id)} className="text-xs text-green-700 font-medium hover:underline">
                                 Mark Paid

@@ -87,6 +87,7 @@ export interface LoanRepayment {
   description: string
   amount: number
   notes: string | null
+  type?: string
 }
 
 export interface Batch {
@@ -94,8 +95,21 @@ export interface Batch {
   artist_id: string
   batch_num: string
   total_gross: number
+  total_comm: number
+  total_sound: number
+  total_mus1: number
+  total_mus2: number
+  total_mus3: number
+  total_mus4: number
+  total_other: number
+  total_warchest: number
   total_nett: number
+  mus1_name: string | null
+  mus2_name: string | null
+  mus3_name: string | null
+  mus4_name: string | null
   status: string
+  approved_by: string | null
   created_at: string
   signed_off_at: string | null
   paid_at: string | null

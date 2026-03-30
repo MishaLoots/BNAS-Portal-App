@@ -25,6 +25,9 @@ export default function ArtistPage() {
   const [loading, setLoading]     = useState(true)
   const [approving, setApproving] = useState<string | null>(null)
   const [signingOff, setSigningOff] = useState<string | null>(null)
+  const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
+  const [batchEdits, setBatchEdits] = useState<Record<string, string>>({})
+  const [savingEdits, setSavingEdits] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -62,6 +65,42 @@ export default function ArtistPage() {
       : b
     ))
     setSigningOff(null)
+    setEditingBatchId(null)
+  }
+
+  function startEditBatch(b: Batch) {
+    setEditingBatchId(b.id)
+    setBatchEdits({
+      total_sound:   String(b.total_sound),
+      total_mus1:    String(b.total_mus1),
+      total_mus2:    String(b.total_mus2),
+      total_mus3:    String(b.total_mus3),
+      total_mus4:    String(b.total_mus4),
+      total_other:   String(b.total_other),
+    })
+  }
+
+  async function saveBatchEdits(batchId: string) {
+    setSavingEdits(true)
+    const b = batches.find(x => x.id === batchId)
+    if (!b) return
+    const sound   = parseFloat(batchEdits.total_sound)   || 0
+    const mus1    = parseFloat(batchEdits.total_mus1)    || 0
+    const mus2    = parseFloat(batchEdits.total_mus2)    || 0
+    const mus3    = parseFloat(batchEdits.total_mus3)    || 0
+    const mus4    = parseFloat(batchEdits.total_mus4)    || 0
+    const other   = parseFloat(batchEdits.total_other)   || 0
+    const newNett = b.total_gross - b.total_comm - sound - mus1 - mus2 - mus3 - mus4 - other - b.total_warchest
+    await supabase.from("batches").update({
+      total_sound: sound, total_mus1: mus1, total_mus2: mus2,
+      total_mus3: mus3, total_mus4: mus4, total_other: other, total_nett: newNett,
+    }).eq("id", batchId)
+    setBatches(bs => bs.map(x => x.id === batchId
+      ? { ...x, total_sound: sound, total_mus1: mus1, total_mus2: mus2, total_mus3: mus3, total_mus4: mus4, total_other: other, total_nett: newNett }
+      : x
+    ))
+    setEditingBatchId(null)
+    setSavingEdits(false)
   }
 
   async function approvePayout(id: string) {
@@ -336,65 +375,76 @@ export default function ArtistPage() {
         {/* ── APPROVALS ── */}
         {tab === "approvals" && (
           <div className="space-y-4">
-            <div className="card p-0">
-              <div className="px-6 py-4 border-b border-gray-100">
-                <h2 className="font-semibold text-navy">Batch Sign-Offs</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Review each batch and sign off to confirm the breakdown is correct</p>
-              </div>
-              {batches.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-400 text-sm">No batches yet</div>
-              ) : (
-                <div className="table-wrap rounded-none rounded-b-xl">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Batch #</th>
-                        <th>Date</th>
-                        <th className="text-right">Gross</th>
-                        <th className="text-right">Nett to You</th>
-                        <th>Status</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batches.map(b => (
-                        <tr key={b.id}>
-                          <td className="font-medium">{b.batch_num}</td>
-                          <td className="text-gray-500">{fmtDate(b.created_at)}</td>
-                          <td className="text-right font-mono">{ZAR(b.total_gross)}</td>
-                          <td className="text-right font-mono font-semibold">{ZAR(b.total_nett)}</td>
-                          <td>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              b.status === "Paid"             ? "bg-green-100 text-green-700" :
-                              b.status === "Signed Off"       ? "bg-blue-100 text-blue-700" :
-                              b.status === "Pending Sign-Off" ? "bg-yellow-100 text-yellow-700" :
-                              "bg-gray-100 text-gray-500"
-                            }`}>{b.status}</span>
-                          </td>
-                          <td>
-                            {b.status === "Pending Sign-Off" && (
-                              <button
-                                onClick={() => signOffBatch(b.id)}
-                                disabled={signingOff === b.id}
-                                className="btn-primary text-xs py-1"
-                              >
-                                {signingOff === b.id ? "Signing…" : "Sign Off"}
-                              </button>
-                            )}
-                            {b.status === "Signed Off" && (
-                              <span className="text-xs text-blue-600">Signed {fmtDate(b.signed_off_at)}</span>
-                            )}
-                            {b.status === "Paid" && (
-                              <span className="text-xs text-green-600">Paid {fmtDate(b.paid_at)}</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+            {batches.length === 0 && (
+              <div className="card text-center text-gray-400 text-sm py-8">No batches yet</div>
+            )}
+            {batches.map(b => (
+              <div key={b.id} className="card p-0">
+                <div className="px-6 py-4 border-b flex justify-between items-center">
+                  <div>
+                    <span className="font-semibold text-navy">{b.batch_num}</span>
+                    <span className="ml-3 text-xs text-gray-500">{fmtDate(b.created_at)}</span>
+                    <span className={`ml-3 text-xs px-2 py-0.5 rounded-full ${
+                      b.status === "Paid"             ? "bg-green-100 text-green-700" :
+                      b.status === "Signed Off"       ? "bg-blue-100 text-blue-700" :
+                      b.status === "Pending Sign-Off" ? "bg-yellow-100 text-yellow-700" :
+                      "bg-gray-100 text-gray-500"
+                    }`}>{b.status}</span>
+                  </div>
+                  {b.status === "Pending Sign-Off" && editingBatchId !== b.id && (
+                    <button onClick={() => startEditBatch(b)} className="btn-ghost text-xs py-1">Edit Costs</button>
+                  )}
                 </div>
-              )}
-            </div>
+
+                <div className="px-6 py-4">
+                  {editingBatchId === b.id ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-gray-500">Edit costs below if needed, then sign off.</p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div><label>Sound</label><input type="number" value={batchEdits.total_sound} onChange={e => setBatchEdits(x => ({ ...x, total_sound: e.target.value }))} /></div>
+                        {b.mus1_name && <div><label>{b.mus1_name}</label><input type="number" value={batchEdits.total_mus1} onChange={e => setBatchEdits(x => ({ ...x, total_mus1: e.target.value }))} /></div>}
+                        {b.mus2_name && <div><label>{b.mus2_name}</label><input type="number" value={batchEdits.total_mus2} onChange={e => setBatchEdits(x => ({ ...x, total_mus2: e.target.value }))} /></div>}
+                        {b.mus3_name && <div><label>{b.mus3_name}</label><input type="number" value={batchEdits.total_mus3} onChange={e => setBatchEdits(x => ({ ...x, total_mus3: e.target.value }))} /></div>}
+                        {b.mus4_name && <div><label>{b.mus4_name}</label><input type="number" value={batchEdits.total_mus4} onChange={e => setBatchEdits(x => ({ ...x, total_mus4: e.target.value }))} /></div>}
+                        <div><label>Other</label><input type="number" value={batchEdits.total_other} onChange={e => setBatchEdits(x => ({ ...x, total_other: e.target.value }))} /></div>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button onClick={() => saveBatchEdits(b.id)} disabled={savingEdits} className="btn-ghost text-xs py-1">{savingEdits ? "Saving…" : "Save Changes"}</button>
+                        <button onClick={() => { signOffBatch(b.id) }} disabled={signingOff === b.id} className="btn-primary text-xs py-1">{signingOff === b.id ? "Signing…" : "Save & Sign Off"}</button>
+                        <button onClick={() => setEditingBatchId(null)} className="text-xs text-gray-400 hover:text-gray-600 px-2">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
+                      <div><div className="text-xs text-gray-500">Gross</div><div className="font-mono font-medium">{ZAR(b.total_gross)}</div></div>
+                      <div><div className="text-xs text-gray-500">Commission</div><div className="font-mono text-red-600">({ZAR(b.total_comm)})</div></div>
+                      {b.total_sound > 0 && <div><div className="text-xs text-gray-500">Sound</div><div className="font-mono text-red-600">({ZAR(b.total_sound)})</div></div>}
+                      {b.mus1_name && b.total_mus1 > 0 && <div><div className="text-xs text-gray-500">{b.mus1_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus1)})</div></div>}
+                      {b.mus2_name && b.total_mus2 > 0 && <div><div className="text-xs text-gray-500">{b.mus2_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus2)})</div></div>}
+                      {b.mus3_name && b.total_mus3 > 0 && <div><div className="text-xs text-gray-500">{b.mus3_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus3)})</div></div>}
+                      {b.mus4_name && b.total_mus4 > 0 && <div><div className="text-xs text-gray-500">{b.mus4_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus4)})</div></div>}
+                      {b.total_other > 0 && <div><div className="text-xs text-gray-500">Other</div><div className="font-mono text-red-600">({ZAR(b.total_other)})</div></div>}
+                      {b.total_warchest > 0 && <div><div className="text-xs text-gray-500">Warchest</div><div className="font-mono text-red-600">({ZAR(b.total_warchest)})</div></div>}
+                      <div className="border-l pl-3"><div className="text-xs text-gray-500">Nett to You</div><div className="font-mono font-bold text-green-700">{ZAR(b.total_nett)}</div></div>
+                    </div>
+                  )}
+                </div>
+
+                {b.status === "Pending Sign-Off" && editingBatchId !== b.id && (
+                  <div className="px-6 pb-4">
+                    <button onClick={() => signOffBatch(b.id)} disabled={signingOff === b.id} className="btn-primary text-xs py-1">
+                      {signingOff === b.id ? "Signing…" : "Sign Off"}
+                    </button>
+                  </div>
+                )}
+                {b.status === "Signed Off" && (
+                  <div className="px-6 pb-4 text-xs text-blue-600">✓ Signed off {fmtDate(b.signed_off_at)}</div>
+                )}
+                {b.status === "Paid" && (
+                  <div className="px-6 pb-4 text-xs text-green-600">✓ Paid {fmtDate(b.paid_at)}</div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </main>

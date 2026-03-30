@@ -15,7 +15,7 @@ const AGENTS      = ["","Misha","Gareth","Jako","Que"]
 
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—"
-  const d = new Date(s + "T00:00:00")
+  const d = new Date(s.includes("T") ? s : s + "T00:00:00")
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
 }
 

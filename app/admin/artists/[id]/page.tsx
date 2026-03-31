@@ -62,6 +62,22 @@ export default function ArtistDetailPage() {
   const [batchNumInput, setBatchNumInput] = useState("")
   const [batches, setBatches]             = useState<Batch[]>([])
 
+  // Batch edit/delete
+  const [editingBatchHistId, setEditingBatchHistId] = useState<string | null>(null)
+  const [batchHistEdits, setBatchHistEdits]         = useState<{ batch_num: string; status: string }>({ batch_num: "", status: "" })
+
+  // Payout edit
+  const [editingPayoutId, setEditingPayoutId] = useState<string | null>(null)
+  const [payoutEdits, setPayoutEdits]         = useState<{ payout_date: string; batch_ref: string; amount: string; notes: string }>({ payout_date: "", batch_ref: "", amount: "", notes: "" })
+
+  // Transfer edit
+  const [editingXferId, setEditingXferId] = useState<string | null>(null)
+  const [xferEdits, setXferEdits]         = useState<{ transfer_date: string; description: string; transfer_type: string; amount: string }>({ transfer_date: "", description: "", transfer_type: "", amount: "" })
+
+  // Loan edit
+  const [editingLoanId, setEditingLoanId] = useState<string | null>(null)
+  const [loanEdits, setLoanEdits]         = useState<{ repayment_date: string; description: string; amount: string; notes: string }>({ repayment_date: "", description: "", amount: "", notes: "" })
+
   async function load() {
     const [{ data: a }, { data: s }, { data: t }, { data: p }, { data: l }, { data: b }] = await Promise.all([
       supabase.from("artists").select("*").eq("id", id).single(),
@@ -186,6 +202,95 @@ export default function ArtistDetailPage() {
     setSaving(false)
   }
 
+  // Payout edit/delete
+  function startEditPayout(p: Payout) {
+    setEditingPayoutId(p.id)
+    setPayoutEdits({ payout_date: p.payout_date, batch_ref: p.batch_ref || "", amount: String(p.amount), notes: p.notes || "" })
+  }
+  async function savePayoutEdit() {
+    if (!editingPayoutId) return
+    setSaving(true)
+    await supabase.from("payouts").update({ payout_date: payoutEdits.payout_date, batch_ref: payoutEdits.batch_ref, amount: parseFloat(payoutEdits.amount) || 0, notes: payoutEdits.notes }).eq("id", editingPayoutId)
+    setEditingPayoutId(null)
+    await load(); setSaving(false)
+  }
+  async function deletePayout(payId: string) {
+    if (!window.confirm("Delete this payout record?")) return
+    await supabase.from("payouts").delete().eq("id", payId)
+    await load()
+  }
+
+  // Transfer edit/delete
+  function startEditXfer(t: Transfer) {
+    setEditingXferId(t.id)
+    setXferEdits({ transfer_date: t.transfer_date, description: t.description, transfer_type: t.transfer_type, amount: String(t.amount) })
+  }
+  async function saveXferEdit() {
+    if (!editingXferId) return
+    setSaving(true)
+    await supabase.from("transfers").update({ transfer_date: xferEdits.transfer_date, description: xferEdits.description, transfer_type: xferEdits.transfer_type, amount: parseFloat(xferEdits.amount) || 0 }).eq("id", editingXferId)
+    setEditingXferId(null)
+    await load(); setSaving(false)
+  }
+  async function deleteTransfer(xferId: string) {
+    if (!window.confirm("Delete this transfer record?")) return
+    await supabase.from("transfers").delete().eq("id", xferId)
+    await load()
+  }
+
+  // Loan edit/delete
+  function startEditLoan(l: LoanRepayment) {
+    setEditingLoanId(l.id)
+    setLoanEdits({ repayment_date: l.repayment_date, description: l.description, amount: String(l.amount), notes: l.notes || "" })
+  }
+  async function saveLoanEdit() {
+    if (!editingLoanId) return
+    setSaving(true)
+    await supabase.from("loan_repayments").update({ repayment_date: loanEdits.repayment_date, description: loanEdits.description, amount: parseFloat(loanEdits.amount) || 0, notes: loanEdits.notes }).eq("id", editingLoanId)
+    setEditingLoanId(null)
+    await load(); setSaving(false)
+  }
+  async function deleteLoan(loanId: string) {
+    if (!window.confirm("Delete this loan entry?")) return
+    await supabase.from("loan_repayments").delete().eq("id", loanId)
+    await load()
+  }
+
+  // Batch edit/delete
+  function startEditBatchHist(b: Batch) {
+    setEditingBatchHistId(b.id)
+    setBatchHistEdits({ batch_num: b.batch_num, status: b.status })
+  }
+  async function saveBatchHistEdit() {
+    if (!editingBatchHistId) return
+    setSaving(true)
+    const batch = batches.find(b => b.id === editingBatchHistId)
+    if (batch && batchHistEdits.batch_num !== batch.batch_num) {
+      // rename batch_num on shows too
+      await supabase.from("shows").update({ batch_num: batchHistEdits.batch_num }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    }
+    await supabase.from("batches").update({ batch_num: batchHistEdits.batch_num, status: batchHistEdits.status }).eq("id", editingBatchHistId)
+    setEditingBatchHistId(null)
+    await load(); setSaving(false)
+  }
+  async function deleteBatch(batchId: string) {
+    const batch = batches.find(b => b.id === batchId)
+    if (!batch) return
+    const msg = batch.status === "Paid"
+      ? `Delete batch ${batch.batch_num}? This will also delete the linked payout record and revert show statuses.`
+      : `Delete batch ${batch.batch_num}? Show batch assignments will be cleared.`
+    if (!window.confirm(msg)) return
+    // If paid, delete the linked payout and revert show statuses first (while batch_num still set)
+    if (batch.status === "Paid") {
+      await supabase.from("payouts").delete().eq("artist_id", id).eq("batch_ref", batch.batch_num)
+      await supabase.from("shows").update({ status: "Fee Received" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    }
+    // Clear batch_num on shows
+    await supabase.from("shows").update({ batch_num: null }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    await supabase.from("batches").delete().eq("id", batchId)
+    await load()
+  }
+
   async function updateOpeningBalance(val: string) {
     const num = parseFloat(val)
     if (isNaN(num)) return
@@ -306,8 +411,8 @@ export default function ArtistDetailPage() {
     { key: "batch",  label: "Batch Calc" },
   ]
 
-  // Batch: shows excluding Cancelled
-  const batchShows = shows.filter(s => s.status !== "Cancelled")
+  // Batch: shows excluding Cancelled and already-batched
+  const batchShows = shows.filter(s => s.status !== "Cancelled" && !s.batch_num)
   const batchSel   = batchShows.filter(s => batchSelected.has(s.id))
   const batchTotals = batchSel.reduce(
     (acc, s) => {
@@ -557,14 +662,29 @@ export default function ArtistDetailPage() {
               )}
               <div className="table-wrap rounded-none rounded-b-xl">
                 <table>
-                  <thead><tr><th>Date</th><th>Description</th><th>Type</th><th className="text-right">Amount</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Description</th><th>Type</th><th className="text-right">Amount</th><th></th></tr></thead>
                   <tbody>
-                    {transfers.map(t => (
+                    {transfers.map(t => editingXferId === t.id ? (
+                      <tr key={t.id} className="bg-blue-50">
+                        <td><input type="date" className="w-32" value={xferEdits.transfer_date} onChange={e => setXferEdits(x => ({ ...x, transfer_date: e.target.value }))} /></td>
+                        <td><input value={xferEdits.description} onChange={e => setXferEdits(x => ({ ...x, description: e.target.value }))} /></td>
+                        <td><select value={xferEdits.transfer_type} onChange={e => setXferEdits(x => ({ ...x, transfer_type: e.target.value }))}>{XFER_TYPES.map(ty => <option key={ty}>{ty}</option>)}</select></td>
+                        <td><input type="number" className="w-28 text-right" value={xferEdits.amount} onChange={e => setXferEdits(x => ({ ...x, amount: e.target.value }))} /></td>
+                        <td className="whitespace-nowrap">
+                          <button onClick={saveXferEdit} disabled={saving} className="text-xs text-green-700 font-medium mr-2">Save</button>
+                          <button onClick={() => setEditingXferId(null)} className="text-xs text-gray-500">Cancel</button>
+                        </td>
+                      </tr>
+                    ) : (
                       <tr key={t.id}>
                         <td className="text-gray-500 whitespace-nowrap">{fmtDate(t.transfer_date)}</td>
                         <td>{t.description}</td>
                         <td className="text-gray-500">{t.transfer_type}</td>
                         <td className="text-right font-mono">{ZAR(t.amount)}</td>
+                        <td className="whitespace-nowrap">
+                          <button onClick={() => startEditXfer(t)} className="text-xs text-bblue hover:text-navy mr-2">Edit</button>
+                          <button onClick={() => deleteTransfer(t.id)} className="text-xs text-red-500 hover:text-red-700">Del</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -572,6 +692,7 @@ export default function ArtistDetailPage() {
                     <tr className="bg-lblue font-semibold">
                       <td colSpan={3}>TOTAL TRANSFERS OUT</td>
                       <td className="text-right font-mono">{ZAR(eb.totalOut)}</td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -643,9 +764,21 @@ export default function ArtistDetailPage() {
               )}
               <div className="table-wrap rounded-none rounded-b-xl">
                 <table>
-                  <thead><tr><th>Date</th><th>Batch</th><th className="text-right">Amount</th><th>Notes</th><th className="text-center">Artist Approved</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Batch</th><th className="text-right">Amount</th><th>Notes</th><th className="text-center">Artist Approved</th><th></th></tr></thead>
                   <tbody>
-                    {payouts.map(p => (
+                    {payouts.map(p => editingPayoutId === p.id ? (
+                      <tr key={p.id} className="bg-blue-50">
+                        <td><input type="date" className="w-32" value={payoutEdits.payout_date} onChange={e => setPayoutEdits(x => ({ ...x, payout_date: e.target.value }))} /></td>
+                        <td><input className="w-20" value={payoutEdits.batch_ref} onChange={e => setPayoutEdits(x => ({ ...x, batch_ref: e.target.value }))} /></td>
+                        <td><input type="number" className="w-28 text-right" value={payoutEdits.amount} onChange={e => setPayoutEdits(x => ({ ...x, amount: e.target.value }))} /></td>
+                        <td><input value={payoutEdits.notes} onChange={e => setPayoutEdits(x => ({ ...x, notes: e.target.value }))} /></td>
+                        <td></td>
+                        <td className="whitespace-nowrap">
+                          <button onClick={savePayoutEdit} disabled={saving} className="text-xs text-green-700 font-medium mr-2">Save</button>
+                          <button onClick={() => setEditingPayoutId(null)} className="text-xs text-gray-500">Cancel</button>
+                        </td>
+                      </tr>
+                    ) : (
                       <tr key={p.id}>
                         <td className="whitespace-nowrap">{fmtDate(p.payout_date)}</td>
                         <td>{p.batch_ref}</td>
@@ -656,6 +789,10 @@ export default function ArtistDetailPage() {
                             ? <span className="text-green-600 text-xs font-medium">✓ Approved {fmtDate(p.approved_at?.slice(0,10))}</span>
                             : <span className="text-yellow-600 text-xs">Pending approval</span>}
                         </td>
+                        <td className="whitespace-nowrap">
+                          <button onClick={() => startEditPayout(p)} className="text-xs text-bblue hover:text-navy mr-2">Edit</button>
+                          <button onClick={() => deletePayout(p.id)} className="text-xs text-red-500 hover:text-red-700">Del</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -663,7 +800,7 @@ export default function ArtistDetailPage() {
                     <tr className="bg-lblue font-semibold">
                       <td colSpan={2}>TOTAL PAID</td>
                       <td className="text-right font-mono">{ZAR(paid)}</td>
-                      <td colSpan={2}></td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -738,14 +875,29 @@ export default function ArtistDetailPage() {
             </div>
             {loans.length > 0 && (
               <table className="w-full text-sm">
-                <thead><tr><th className="text-left py-1">Date</th><th className="text-left py-1">Description</th><th className="text-left py-1">Notes</th><th className="text-right py-1">Amount</th></tr></thead>
+                <thead><tr><th className="text-left py-1">Date</th><th className="text-left py-1">Description</th><th className="text-left py-1">Notes</th><th className="text-right py-1">Amount</th><th></th></tr></thead>
                 <tbody>
-                  {loans.map(l => (
+                  {loans.map(l => editingLoanId === l.id ? (
+                    <tr key={l.id} className="border-t bg-blue-50">
+                      <td className="py-1"><input type="date" className="w-32 text-sm" value={loanEdits.repayment_date} onChange={e => setLoanEdits(x => ({ ...x, repayment_date: e.target.value }))} /></td>
+                      <td className="py-1"><input className="text-sm" value={loanEdits.description} onChange={e => setLoanEdits(x => ({ ...x, description: e.target.value }))} /></td>
+                      <td className="py-1"><input className="text-sm" value={loanEdits.notes} onChange={e => setLoanEdits(x => ({ ...x, notes: e.target.value }))} /></td>
+                      <td className="py-1"><input type="number" className="w-24 text-right text-sm" value={loanEdits.amount} onChange={e => setLoanEdits(x => ({ ...x, amount: e.target.value }))} /></td>
+                      <td className="py-1 whitespace-nowrap">
+                        <button onClick={saveLoanEdit} disabled={saving} className="text-xs text-green-700 font-medium mr-2">Save</button>
+                        <button onClick={() => setEditingLoanId(null)} className="text-xs text-gray-500">Cancel</button>
+                      </td>
+                    </tr>
+                  ) : (
                     <tr key={l.id} className="border-t">
                       <td className="py-1 text-gray-500 whitespace-nowrap">{fmtDate(l.repayment_date)}</td>
                       <td className="py-1">{l.description}</td>
                       <td className="py-1 text-gray-400 text-xs">{l.notes || "—"}</td>
                       <td className="py-1 text-right font-mono text-green-700">{ZAR(l.amount)}</td>
+                      <td className="py-1 whitespace-nowrap">
+                        <button onClick={() => startEditLoan(l)} className="text-xs text-bblue hover:text-navy mr-2">Edit</button>
+                        <button onClick={() => deleteLoan(l.id)} className="text-xs text-red-500 hover:text-red-700">Del</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -901,7 +1053,26 @@ export default function ArtistDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {batches.map(b => (
+                      {batches.map(b => editingBatchHistId === b.id ? (
+                        <tr key={b.id} className="bg-blue-50">
+                          <td><input className="w-24 font-medium" value={batchHistEdits.batch_num} onChange={e => setBatchHistEdits(x => ({ ...x, batch_num: e.target.value }))} /></td>
+                          <td className="text-gray-500">{fmtDate(b.created_at)}</td>
+                          <td className="text-right font-mono">{ZAR(b.total_gross)}</td>
+                          <td className="text-right font-mono font-semibold">{ZAR(b.total_nett)}</td>
+                          <td>
+                            <select className="text-xs" value={batchHistEdits.status} onChange={e => setBatchHistEdits(x => ({ ...x, status: e.target.value }))}>
+                              <option>Pending Sign-Off</option>
+                              <option>Signed Off</option>
+                              <option>Paid</option>
+                            </select>
+                          </td>
+                          <td className="text-gray-500 text-xs">{b.signed_off_at ? fmtDate(b.signed_off_at) : "—"}</td>
+                          <td className="whitespace-nowrap space-x-2">
+                            <button onClick={saveBatchHistEdit} disabled={saving} className="text-xs text-green-700 font-medium">Save</button>
+                            <button onClick={() => setEditingBatchHistId(null)} className="text-xs text-gray-500">Cancel</button>
+                          </td>
+                        </tr>
+                      ) : (
                         <tr key={b.id}>
                           <td className="font-medium">{b.batch_num}</td>
                           <td className="text-gray-500">{fmtDate(b.created_at)}</td>
@@ -916,17 +1087,15 @@ export default function ArtistDetailPage() {
                             }`}>{b.status}</span>
                           </td>
                           <td className="text-gray-500 text-xs">{b.signed_off_at ? fmtDate(b.signed_off_at) : "—"}</td>
-                          <td className="space-x-2">
+                          <td className="whitespace-nowrap space-x-2">
                             {b.status === "Pending Sign-Off" && (
-                              <button onClick={() => approveOnBehalf(b.id)} className="text-xs text-bblue font-medium hover:underline">
-                                Approve on Behalf
-                              </button>
+                              <button onClick={() => approveOnBehalf(b.id)} className="text-xs text-bblue font-medium hover:underline">Approve on Behalf</button>
                             )}
                             {b.status === "Signed Off" && (
-                              <button onClick={() => markBatchPaid(b.id)} className="text-xs text-green-700 font-medium hover:underline">
-                                Mark Paid
-                              </button>
+                              <button onClick={() => markBatchPaid(b.id)} className="text-xs text-green-700 font-medium hover:underline">Mark Paid</button>
                             )}
+                            <button onClick={() => startEditBatchHist(b)} className="text-xs text-gray-500 hover:text-navy">Edit</button>
+                            <button onClick={() => deleteBatch(b.id)} className="text-xs text-red-500 hover:text-red-700">Del</button>
                           </td>
                         </tr>
                       ))}

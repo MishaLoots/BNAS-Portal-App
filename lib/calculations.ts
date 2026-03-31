@@ -72,6 +72,11 @@ export function agentSplitPct(agentName: string, artist: Artist): number {
 
 /** Amount agent earns from a single show */
 export function calcAgentEarned(s: Show, artist: Artist, agentName: string): number {
+  // 007 is a test agent — earns full BNAS commission on shows they're responsible for
+  if (agentName.toLowerCase() === "007") {
+    const isAgent = (s.responsible_agent || "").toLowerCase() === "007" || (s.secondary_agent || "").toLowerCase() === "007"
+    return isAgent ? s.gross * s.comm_pct : 0
+  }
   const comm    = s.gross * s.comm_pct
   const toSplit = comm * (1 - (artist.bnas_overhead_pct || 0.2))
   return toSplit * agentSplitPct(agentName, artist)

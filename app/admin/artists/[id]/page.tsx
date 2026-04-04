@@ -780,7 +780,11 @@ export default function ArtistDetailPage() {
                       {(b.mus4_name && b.total_mus4 > 0) && <div><div className="text-xs text-gray-500">{b.mus4_name}</div><div className="font-mono text-red-600">({ZAR(b.total_mus4)})</div></div>}
                       {b.total_other > 0 && <div><div className="text-xs text-gray-500">Other</div><div className="font-mono text-red-600">({ZAR(b.total_other)})</div></div>}
                       {b.total_warchest > 0 && <div><div className="text-xs text-gray-500">Warchest</div><div className="font-mono text-red-600">({ZAR(b.total_warchest)})</div></div>}
-                      <div className="border-l pl-3"><div className="text-xs text-gray-500">Nett to Artist</div><div className="font-mono font-bold text-green-700">{ZAR(b.total_nett)}</div></div>
+                      <div className="border-l pl-3">
+                        <div className="text-xs text-gray-500">Nett to Artist {(b.payout_pct || 100) < 100 ? `(${b.payout_pct}%)` : ""}</div>
+                        <div className="font-mono font-bold text-green-700">{ZAR(b.total_nett * (b.payout_pct || 100) / 100)}</div>
+                        {(b.payout_pct || 100) < 100 && <div className="text-xs text-gray-400">Full nett: {ZAR(b.total_nett)}</div>}
+                      </div>
                     </div>
                   </div>
                 ))}

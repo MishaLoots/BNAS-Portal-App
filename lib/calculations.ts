@@ -62,22 +62,35 @@ export function nettOwed(shows: Show[]) {
 /** Agent's split % for a given artist based on their name */
 export function agentSplitPct(agentName: string, artist: Artist): number {
   switch (agentName.toLowerCase()) {
-    case "gareth": return artist.gareth_split_pct || 0
-    case "misha":  return artist.misha_split_pct  || 0
-    case "jako":   return artist.jako_split_pct   || 0
-    case "que":    return artist.que_split_pct     || 0
-    default:       return 0
+    case "gareth":    return artist.gareth_split_pct    || 0
+    case "misha":     return artist.misha_split_pct     || 0
+    case "jako":      return artist.jako_split_pct      || 0
+    case "que":       return artist.que_split_pct       || 0
+    case "bnas pool": return artist.unalloc_split_pct   || 0
+    default:          return 0
   }
 }
 
 /** Amount agent earns from a single show */
 export function calcAgentEarned(s: Show, artist: Artist, agentName: string): number {
-  // 007 is a test agent — earns full BNAS commission on shows they're responsible for
-  if (agentName.toLowerCase() === "007") {
+  const name = agentName.toLowerCase()
+  // 007 test agent — earns full BNAS commission on shows they're responsible for
+  if (name === "007") {
     const isAgent = (s.responsible_agent || "").toLowerCase() === "007" || (s.secondary_agent || "").toLowerCase() === "007"
     return isAgent ? s.gross * s.comm_pct : 0
+  }
+  // BNAS Overhead — earns 20% overhead slice of every show's commission
+  if (name === "bnas overhead") {
+    return s.gross * s.comm_pct * (artist.bnas_overhead_pct || 0.2)
   }
   const comm    = s.gross * s.comm_pct
   const toSplit = comm * (1 - (artist.bnas_overhead_pct || 0.2))
   return toSplit * agentSplitPct(agentName, artist)
+}
+
+/** Total warchest retained in escrow from All Paid escrow shows */
+export function warchestPot(shows: Show[]): number {
+  return shows
+    .filter(s => s.pay_type === "Escrow" && s.status === "All Paid")
+    .reduce((sum, s) => sum + calcShow(s).warchest, 0)
 }

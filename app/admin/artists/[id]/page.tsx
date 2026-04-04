@@ -4,7 +4,7 @@ import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
 import type { Artist, Show, Transfer, Payout, LoanRepayment, Batch } from "@/lib/types"
-import { ZAR, calcShow, escrowBalance, nettOwed } from "@/lib/calculations"
+import { ZAR, calcShow, escrowBalance, nettOwed, warchestPot } from "@/lib/calculations"
 
 type Tab = "shows" | "escrow" | "payouts" | "loan" | "batch"
 
@@ -77,6 +77,13 @@ export default function ArtistDetailPage() {
   // Loan edit
   const [editingLoanId, setEditingLoanId] = useState<string | null>(null)
   const [loanEdits, setLoanEdits]         = useState<{ repayment_date: string; description: string; amount: string; notes: string }>({ repayment_date: "", description: "", amount: "", notes: "" })
+
+  // Show log filters
+  const [filterEvent, setFilterEvent]   = useState("")
+  const [filterAgent, setFilterAgent]   = useState("")
+  const [filterStatus, setFilterStatus] = useState("")
+  const [filterFrom, setFilterFrom]     = useState("")
+  const [filterTo, setFilterTo]         = useState("")
 
   async function load() {
     const [{ data: a }, { data: s }, { data: t }, { data: p }, { data: l }, { data: b }] = await Promise.all([
@@ -185,16 +192,17 @@ export default function ArtistDetailPage() {
     const amt = parseFloat(newLoan.amount) || 0
     if (newLoan.type === "Repayment") {
       await supabase.from("loan_repayments").insert({
-        artist_id: id,
-        repayment_date: newLoan.date,
-        amount: amt,
-        description: newLoan.description,
-        notes: newLoan.notes || null,
+        artist_id: id, repayment_date: newLoan.date, amount: amt,
+        description: newLoan.description, notes: newLoan.notes || null, type: "Repayment",
       })
     } else {
-      // Additional loan — increase opening balance
+      // Additional loan — increase opening balance AND log it
       const newOpening = (artist?.loan_opening || 0) + amt
       await supabase.from("artists").update({ loan_opening: newOpening }).eq("id", id)
+      await supabase.from("loan_repayments").insert({
+        artist_id: id, repayment_date: newLoan.date, amount: amt,
+        description: newLoan.description, notes: newLoan.notes || null, type: "Additional Loan",
+      })
     }
     await load()
     setLoanForm(false)
@@ -400,7 +408,18 @@ export default function ArtistDetailPage() {
   const paid = payouts.reduce((s, p) => s + p.amount, 0)
   const owed = nettOwed(shows)
   const due  = owed - paid
-  const loanRepaid      = loans.reduce((s, l) => s + l.amount, 0)
+  const wcPot = warchestPot(shows)
+
+  // Filtered shows for show log
+  const filteredShows = shows.filter(s => {
+    if (filterEvent  && !s.event.toLowerCase().includes(filterEvent.toLowerCase())) return false
+    if (filterAgent  && s.responsible_agent !== filterAgent && s.secondary_agent !== filterAgent) return false
+    if (filterStatus && s.status !== filterStatus) return false
+    if (filterFrom   && s.show_date < filterFrom) return false
+    if (filterTo     && s.show_date > filterTo) return false
+    return true
+  })
+  const loanRepaid      = loans.filter(l => !l.type || l.type === "Repayment").reduce((s, l) => s + l.amount, 0)
   const loanOutstanding = artist.loan_opening - loanRepaid
 
   const TABS: { key: Tab; label: string }[] = [
@@ -479,6 +498,18 @@ export default function ArtistDetailPage() {
               </button>
             </div>
 
+            {/* Filter bar */}
+            <div className="px-6 py-3 border-b border-gray-100 bg-gray-50 flex flex-wrap gap-2 items-end">
+              <div><label className="text-xs text-gray-500 block mb-1">Search event</label><input className="w-36 text-sm py-1" placeholder="Event name…" value={filterEvent} onChange={e => setFilterEvent(e.target.value)} /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Agent</label><select className="text-sm py-1" value={filterAgent} onChange={e => setFilterAgent(e.target.value)}>{["", ...AGENTS.filter(a => a)].map(a => <option key={a} value={a}>{a || "All agents"}</option>)}</select></div>
+              <div><label className="text-xs text-gray-500 block mb-1">Status</label><select className="text-sm py-1" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}><option value="">All</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select></div>
+              <div><label className="text-xs text-gray-500 block mb-1">From</label><input type="date" className="text-sm py-1" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} /></div>
+              <div><label className="text-xs text-gray-500 block mb-1">To</label><input type="date" className="text-sm py-1" value={filterTo} onChange={e => setFilterTo(e.target.value)} /></div>
+              {(filterEvent || filterAgent || filterStatus || filterFrom || filterTo) && (
+                <button onClick={() => { setFilterEvent(""); setFilterAgent(""); setFilterStatus(""); setFilterFrom(""); setFilterTo("") }} className="text-xs text-bblue hover:underline self-end pb-1">Clear</button>
+              )}
+            </div>
+
             {showForm && (
               <div className="p-6 border-b border-gray-100 bg-blue-50">
                 <h3 className="font-medium text-navy mb-4">{editingShowId ? "Edit Show" : "New Show"}</h3>
@@ -533,7 +564,7 @@ export default function ArtistDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {shows.map(s => {
+                  {filteredShows.map(s => {
                     const c = calcShow(s)
                     return (
                       <tr key={s.id} className={editingShowId === s.id ? "bg-blue-50" : ""}>
@@ -582,18 +613,18 @@ export default function ArtistDetailPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-lblue font-semibold">
-                    <td colSpan={3}>TOTALS</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.gross, 0))}</td>
+                    <td colSpan={3}>TOTALS ({filteredShows.length})</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.gross, 0))}</td>
                     <td></td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).comm, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.sound, 0))}</td>
-                    {artist.mus1_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus1, 0))}</td>}
-                    {artist.mus2_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus2, 0))}</td>}
-                    {artist.mus3_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus3, 0))}</td>}
-                    {artist.mus4_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + (r.mus4||0), 0))}</td>}
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.other_costs, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).warchest, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).nett, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + calcShow(r).comm, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.sound, 0))}</td>
+                    {artist.mus1_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.mus1, 0))}</td>}
+                    {artist.mus2_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.mus2, 0))}</td>}
+                    {artist.mus3_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.mus3, 0))}</td>}
+                    {artist.mus4_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + (r.mus4||0), 0))}</td>}
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.other_costs, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + calcShow(r).warchest, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + calcShow(r).nett, 0))}</td>
                     <td colSpan={5}></td>
                   </tr>
                 </tfoot>
@@ -637,9 +668,15 @@ export default function ArtistDetailPage() {
                   <span className="font-mono">{ZAR(eb.projected)}</span>
                 </div>
                 <div className="flex justify-between py-2 text-gray-400 text-xs">
-                  <span>ⓘ Warchest retained in balance</span>
+                  <span>ⓘ Warchest retained in balance (partial deps)</span>
                   <span className="font-mono">{ZAR(eb.warchestIn)}</span>
                 </div>
+                {wcPot > 0 && (
+                  <div className="flex justify-between py-2 border-t text-sm font-medium text-purple-700">
+                    <span>Warchest Pot (All Paid shows)</span>
+                    <span className="font-mono">{ZAR(wcPot)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -875,11 +912,12 @@ export default function ArtistDetailPage() {
             </div>
             {loans.length > 0 && (
               <table className="w-full text-sm">
-                <thead><tr><th className="text-left py-1">Date</th><th className="text-left py-1">Description</th><th className="text-left py-1">Notes</th><th className="text-right py-1">Amount</th><th></th></tr></thead>
+                <thead><tr><th className="text-left py-1">Date</th><th className="text-left py-1">Type</th><th className="text-left py-1">Description</th><th className="text-left py-1">Notes</th><th className="text-right py-1">Amount</th><th></th></tr></thead>
                 <tbody>
                   {loans.map(l => editingLoanId === l.id ? (
                     <tr key={l.id} className="border-t bg-blue-50">
                       <td className="py-1"><input type="date" className="w-32 text-sm" value={loanEdits.repayment_date} onChange={e => setLoanEdits(x => ({ ...x, repayment_date: e.target.value }))} /></td>
+                      <td className="py-1 text-xs text-gray-500">{l.type || "Repayment"}</td>
                       <td className="py-1"><input className="text-sm" value={loanEdits.description} onChange={e => setLoanEdits(x => ({ ...x, description: e.target.value }))} /></td>
                       <td className="py-1"><input className="text-sm" value={loanEdits.notes} onChange={e => setLoanEdits(x => ({ ...x, notes: e.target.value }))} /></td>
                       <td className="py-1"><input type="number" className="w-24 text-right text-sm" value={loanEdits.amount} onChange={e => setLoanEdits(x => ({ ...x, amount: e.target.value }))} /></td>
@@ -891,9 +929,14 @@ export default function ArtistDetailPage() {
                   ) : (
                     <tr key={l.id} className="border-t">
                       <td className="py-1 text-gray-500 whitespace-nowrap">{fmtDate(l.repayment_date)}</td>
+                      <td className="py-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${l.type === "Additional Loan" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                          {l.type || "Repayment"}
+                        </span>
+                      </td>
                       <td className="py-1">{l.description}</td>
                       <td className="py-1 text-gray-400 text-xs">{l.notes || "—"}</td>
-                      <td className="py-1 text-right font-mono text-green-700">{ZAR(l.amount)}</td>
+                      <td className={`py-1 text-right font-mono ${l.type === "Additional Loan" ? "text-red-600" : "text-green-700"}`}>{ZAR(l.amount)}</td>
                       <td className="py-1 whitespace-nowrap">
                         <button onClick={() => startEditLoan(l)} className="text-xs text-bblue hover:text-navy mr-2">Edit</button>
                         <button onClick={() => deleteLoan(l.id)} className="text-xs text-red-500 hover:text-red-700">Del</button>

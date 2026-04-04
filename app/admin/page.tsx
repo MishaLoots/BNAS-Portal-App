@@ -18,6 +18,7 @@ interface AgentRow {
   earned: number
   paid: number
   payouts: AgentPayout[]
+  showEarnings: { show: Show; artistName: string; earned: number }[]
 }
 
 const PAYOUT_TYPES = ["Payout", "Advance", "Expense Reimbursement", "Other"]
@@ -33,6 +34,7 @@ export default function AdminPage() {
   const [agentRows, setAgentRows] = useState<AgentRow[]>([])
   const [loading, setLoading]     = useState(true)
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
+  const [agentView, setAgentView]         = useState<"payouts" | "shows">("payouts")
   const [editingPayout, setEditingPayout] = useState<AgentPayout | null>(null)
   const [payoutForm, setPayoutForm] = useState<{ agent_id: string; payout_date: string; amount: string; payout_type: string; description: string } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -65,11 +67,14 @@ export default function AdminPage() {
     if (agents) {
       const computed: AgentRow[] = agents.map((agent: Agent) => {
         const myPayouts = (agentPayouts || []).filter((p: AgentPayout) => p.agent_id === agent.id)
-        const earned = artistRows.reduce((sum, { artist, shows }) => {
-          return sum + shows.reduce((s2, show) => s2 + calcAgentEarned(show, artist, agent.name), 0)
-        }, 0)
+        const showEarnings = artistRows.flatMap(({ artist, shows }) =>
+          shows
+            .map(show => ({ show, artistName: artist.name, earned: calcAgentEarned(show, artist, agent.name) }))
+            .filter(x => x.earned > 0)
+        )
+        const earned = showEarnings.reduce((sum, x) => sum + x.earned, 0)
         const paid = myPayouts.reduce((sum: number, p: AgentPayout) => sum + p.amount, 0)
-        return { agent, earned, paid, payouts: myPayouts }
+        return { agent, earned, paid, payouts: myPayouts, showEarnings }
       })
       setAgentRows(computed)
     }
@@ -211,56 +216,88 @@ export default function AdminPage() {
               return (
                 <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-xl">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-navy text-sm">{row.agent.name} — Payout Log</h3>
-                    {!payoutForm && (
-                      <button
-                        onClick={() => setPayoutForm({ agent_id: row.agent.id, payout_date: "", amount: "", payout_type: "Payout", description: "" })}
-                        className="btn-primary text-xs py-1"
-                      >
-                        + Log Payment
-                      </button>
-                    )}
+                    <h3 className="font-semibold text-navy text-sm">{row.agent.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="flex bg-white border border-gray-200 rounded-lg overflow-hidden text-xs">
+                        <button onClick={() => setAgentView("payouts")} className={`px-3 py-1 ${agentView === "payouts" ? "bg-navy text-white" : "text-gray-500"}`}>Payout Log</button>
+                        <button onClick={() => setAgentView("shows")} className={`px-3 py-1 ${agentView === "shows" ? "bg-navy text-white" : "text-gray-500"}`}>Shows ({row.showEarnings.length})</button>
+                      </div>
+                      {agentView === "payouts" && !payoutForm && (
+                        <button onClick={() => setPayoutForm({ agent_id: row.agent.id, payout_date: "", amount: "", payout_type: "Payout", description: "" })} className="btn-primary text-xs py-1">+ Log Payment</button>
+                      )}
+                    </div>
                   </div>
 
-                  {payoutForm && payoutForm.agent_id === row.agent.id && (
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
-                      <div><label>Date</label><input type="date" value={payoutForm.payout_date} onChange={e => setPayoutForm(f => f ? { ...f, payout_date: e.target.value } : f)} /></div>
-                      <div><label>Type</label><select value={payoutForm.payout_type} onChange={e => setPayoutForm(f => f ? { ...f, payout_type: e.target.value } : f)}>{PAYOUT_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
-                      <div><label>Amount</label><input type="number" placeholder="0" value={payoutForm.amount} onChange={e => setPayoutForm(f => f ? { ...f, amount: e.target.value } : f)} /></div>
-                      <div className="sm:col-span-2"><label>Description</label><input placeholder="Optional note" value={payoutForm.description} onChange={e => setPayoutForm(f => f ? { ...f, description: e.target.value } : f)} /></div>
-                      <div className="sm:col-span-5 flex gap-2">
-                        <button onClick={saveAgentPayout} disabled={saving} className="btn-primary text-xs py-1">{saving ? "Saving…" : editingPayout ? "Update" : "Save"}</button>
-                        <button onClick={() => { setPayoutForm(null); setEditingPayout(null) }} className="btn-ghost text-xs py-1">Cancel</button>
-                      </div>
-                    </div>
+                  {agentView === "payouts" && (
+                    <>
+                      {payoutForm && payoutForm.agent_id === row.agent.id && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
+                          <div><label>Date</label><input type="date" value={payoutForm.payout_date} onChange={e => setPayoutForm(f => f ? { ...f, payout_date: e.target.value } : f)} /></div>
+                          <div><label>Type</label><select value={payoutForm.payout_type} onChange={e => setPayoutForm(f => f ? { ...f, payout_type: e.target.value } : f)}>{PAYOUT_TYPES.map(t => <option key={t}>{t}</option>)}</select></div>
+                          <div><label>Amount</label><input type="number" placeholder="0" value={payoutForm.amount} onChange={e => setPayoutForm(f => f ? { ...f, amount: e.target.value } : f)} /></div>
+                          <div className="sm:col-span-2"><label>Description</label><input placeholder="Optional note" value={payoutForm.description} onChange={e => setPayoutForm(f => f ? { ...f, description: e.target.value } : f)} /></div>
+                          <div className="sm:col-span-5 flex gap-2">
+                            <button onClick={saveAgentPayout} disabled={saving} className="btn-primary text-xs py-1">{saving ? "Saving…" : editingPayout ? "Update" : "Save"}</button>
+                            <button onClick={() => { setPayoutForm(null); setEditingPayout(null) }} className="btn-ghost text-xs py-1">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                      {row.payouts.length === 0 ? (
+                        <p className="text-sm text-gray-400">No payments logged yet</p>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead><tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                            <th className="pb-1 font-medium">Date</th><th className="pb-1 font-medium">Type</th>
+                            <th className="pb-1 font-medium text-right">Amount</th><th className="pb-1 font-medium">Description</th><th></th>
+                          </tr></thead>
+                          <tbody>
+                            {row.payouts.map(p => (
+                              <tr key={p.id} className="border-b border-gray-100">
+                                <td className="py-1.5 text-gray-600">{fmtDate(p.payout_date)}</td>
+                                <td className="py-1.5 text-gray-600">{p.payout_type || "Payout"}</td>
+                                <td className="py-1.5 text-right font-mono font-semibold">{ZAR(p.amount)}</td>
+                                <td className="py-1.5 text-gray-500">{p.description || "—"}</td>
+                                <td className="py-1.5 text-right">
+                                  <button onClick={() => startEditPayout(p)} className="text-xs text-bblue hover:underline mr-2">Edit</button>
+                                  <button onClick={() => deleteAgentPayout(p.id)} className="text-xs text-red-500 hover:underline">Del</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </>
                   )}
 
-                  {row.payouts.length === 0 ? (
-                    <p className="text-sm text-gray-400">No payments logged yet</p>
-                  ) : (
-                    <table className="w-full text-sm">
-                      <thead><tr className="text-left text-xs text-gray-500 border-b border-gray-200">
-                        <th className="pb-1 font-medium">Date</th>
-                        <th className="pb-1 font-medium">Type</th>
-                        <th className="pb-1 font-medium text-right">Amount</th>
-                        <th className="pb-1 font-medium">Description</th>
-                        <th></th>
-                      </tr></thead>
-                      <tbody>
-                        {row.payouts.map(p => (
-                          <tr key={p.id} className="border-b border-gray-100">
-                            <td className="py-1.5 text-gray-600">{fmtDate(p.payout_date)}</td>
-                            <td className="py-1.5 text-gray-600">{p.payout_type || "Payout"}</td>
-                            <td className="py-1.5 text-right font-mono font-semibold">{ZAR(p.amount)}</td>
-                            <td className="py-1.5 text-gray-500">{p.description || "—"}</td>
-                            <td className="py-1.5 text-right">
-                              <button onClick={() => startEditPayout(p)} className="text-xs text-bblue hover:underline mr-2">Edit</button>
-                              <button onClick={() => deleteAgentPayout(p.id)} className="text-xs text-red-500 hover:underline">Del</button>
-                            </td>
+                  {agentView === "shows" && (
+                    row.showEarnings.length === 0 ? (
+                      <p className="text-sm text-gray-400">No show earnings for this agent</p>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead><tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                          <th className="pb-1 font-medium">Date</th><th className="pb-1 font-medium">Artist</th>
+                          <th className="pb-1 font-medium">Event</th><th className="pb-1 font-medium text-right">Gross</th>
+                          <th className="pb-1 font-medium text-right">Earned</th>
+                        </tr></thead>
+                        <tbody>
+                          {row.showEarnings.map(x => (
+                            <tr key={x.show.id} className="border-b border-gray-100">
+                              <td className="py-1.5 text-gray-500 whitespace-nowrap">{fmtDate(x.show.show_date)}</td>
+                              <td className="py-1.5 text-gray-600">{x.artistName}</td>
+                              <td className="py-1.5">{x.show.event}</td>
+                              <td className="py-1.5 text-right font-mono">{ZAR(x.show.gross)}</td>
+                              <td className="py-1.5 text-right font-mono font-semibold text-green-700">{ZAR(x.earned)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-gray-200 font-semibold text-xs">
+                            <td colSpan={4} className="pt-1">TOTAL</td>
+                            <td className="pt-1 text-right font-mono text-green-700">{ZAR(row.showEarnings.reduce((s, x) => s + x.earned, 0))}</td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </tfoot>
+                      </table>
+                    )
                   )}
                 </div>
               )

@@ -108,6 +108,7 @@ export interface Batch {
   mus2_name: string | null
   mus3_name: string | null
   mus4_name: string | null
+  payout_pct: number
   status: string
   approved_by: string | null
   created_at: string

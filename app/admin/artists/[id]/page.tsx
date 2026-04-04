@@ -60,6 +60,7 @@ export default function ArtistDetailPage() {
   const [batchSelected, setBatchSelected] = useState<Set<string>>(new Set())
   const [batchSaving, setBatchSaving]     = useState(false)
   const [batchNumInput, setBatchNumInput] = useState("")
+  const [batchPayoutPct, setBatchPayoutPct] = useState("100")
   const [batches, setBatches]             = useState<Batch[]>([])
 
   // Batch edit/delete
@@ -364,10 +365,12 @@ export default function ArtistDetailPage() {
       mus2_name:     artist?.mus2_name || null,
       mus3_name:     artist?.mus3_name || null,
       mus4_name:     artist?.mus4_name || null,
+      payout_pct:    parseFloat(batchPayoutPct) || 100,
       status:        "Pending Sign-Off",
     })
     setBatchSelected(new Set())
     setBatchNumInput("")
+    setBatchPayoutPct("100")
     await load()
     setBatchSaving(false)
   }
@@ -388,12 +391,13 @@ export default function ArtistDetailPage() {
     if (!batch) return
     await supabase.from("batches").update({ status: "Paid", paid_at: new Date().toISOString() }).eq("id", batchId)
     await supabase.from("shows").update({ status: "All Paid" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    const payoutAmt = Math.round(batch.total_nett * (batch.payout_pct || 100) / 100 * 100) / 100
     await supabase.from("payouts").insert({
       artist_id: id,
       payout_date: new Date().toISOString().slice(0, 10),
       batch_ref: batch.batch_num,
-      amount: batch.total_nett,
-      notes: `Batch ${batch.batch_num} paid`,
+      amount: payoutAmt,
+      notes: `Batch ${batch.batch_num} paid${(batch.payout_pct || 100) < 100 ? ` (${batch.payout_pct}%)` : ""}`,
       approved_by_artist: true,
       approved_at: batch.signed_off_at || new Date().toISOString(),
     })
@@ -959,13 +963,27 @@ export default function ArtistDetailPage() {
                   <p className="text-sm text-gray-500 mt-0.5">Select shows, assign a batch number, and send for artist sign-off</p>
                 </div>
                 {batchSelected.size > 0 && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <input
                       className="w-32"
                       placeholder="Batch # e.g. B004"
                       value={batchNumInput}
                       onChange={e => setBatchNumInput(e.target.value)}
                     />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number" min="1" max="100" className="w-20 text-right"
+                        placeholder="100"
+                        value={batchPayoutPct}
+                        onChange={e => setBatchPayoutPct(e.target.value)}
+                      />
+                      <span className="text-sm text-gray-500">% payout</span>
+                    </div>
+                    {batchTotals.nett > 0 && (
+                      <span className="text-sm font-mono text-green-700">
+                        = {ZAR(batchTotals.nett * (parseFloat(batchPayoutPct) || 100) / 100)}
+                      </span>
+                    )}
                     <button
                       onClick={assignBatch}
                       disabled={batchSaving || !batchNumInput.trim()}
@@ -1090,6 +1108,8 @@ export default function ArtistDetailPage() {
                         <th>Created</th>
                         <th className="text-right">Gross</th>
                         <th className="text-right">Nett</th>
+                        <th className="text-right">Payout %</th>
+                        <th className="text-right">Payout Amt</th>
                         <th>Status</th>
                         <th>Signed Off</th>
                         <th></th>
@@ -1102,6 +1122,8 @@ export default function ArtistDetailPage() {
                           <td className="text-gray-500">{fmtDate(b.created_at)}</td>
                           <td className="text-right font-mono">{ZAR(b.total_gross)}</td>
                           <td className="text-right font-mono font-semibold">{ZAR(b.total_nett)}</td>
+                          <td className="text-right">{b.payout_pct || 100}%</td>
+                          <td className="text-right font-mono">{ZAR(b.total_nett * (b.payout_pct || 100) / 100)}</td>
                           <td>
                             <select className="text-xs" value={batchHistEdits.status} onChange={e => setBatchHistEdits(x => ({ ...x, status: e.target.value }))}>
                               <option>Pending Sign-Off</option>
@@ -1121,6 +1143,8 @@ export default function ArtistDetailPage() {
                           <td className="text-gray-500">{fmtDate(b.created_at)}</td>
                           <td className="text-right font-mono">{ZAR(b.total_gross)}</td>
                           <td className="text-right font-mono font-semibold">{ZAR(b.total_nett)}</td>
+                          <td className="text-right text-gray-500">{b.payout_pct || 100}%</td>
+                          <td className="text-right font-mono font-semibold text-green-700">{ZAR(b.total_nett * (b.payout_pct || 100) / 100)}</td>
                           <td>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               b.status === "Paid"           ? "bg-green-100 text-green-700" :

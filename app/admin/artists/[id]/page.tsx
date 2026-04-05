@@ -386,20 +386,27 @@ export default function ArtistDetailPage() {
   }
 
   async function markBatchPaid(batchId: string) {
-    if (!window.confirm("Mark this batch as Paid? This will set all shows to 'All Paid' and log the payout.")) return
+    if (!window.confirm("Mark this batch as Paid? This will set all shows to 'All Paid', log the payout, and create the escrow transfer.")) return
     const batch = batches.find(b => b.id === batchId)
     if (!batch) return
+    const payoutPct = batch.payout_pct || 100
+    const payoutAmt = Math.round(batch.total_nett * payoutPct / 100 * 100) / 100
+    const today = new Date().toISOString().slice(0, 10)
+    const note  = `${batch.batch_num}${payoutPct < 100 ? ` (${payoutPct}%)` : ""}`
+
     await supabase.from("batches").update({ status: "Paid", paid_at: new Date().toISOString() }).eq("id", batchId)
     await supabase.from("shows").update({ status: "All Paid" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
-    const payoutAmt = Math.round(batch.total_nett * (batch.payout_pct || 100) / 100 * 100) / 100
+    // Log artist payout
     await supabase.from("payouts").insert({
-      artist_id: id,
-      payout_date: new Date().toISOString().slice(0, 10),
-      batch_ref: batch.batch_num,
-      amount: payoutAmt,
-      notes: `Batch ${batch.batch_num} paid${(batch.payout_pct || 100) < 100 ? ` (${batch.payout_pct}%)` : ""}`,
-      approved_by_artist: true,
-      approved_at: batch.signed_off_at || new Date().toISOString(),
+      artist_id: id, payout_date: today, batch_ref: batch.batch_num,
+      amount: payoutAmt, notes: `Batch ${note} paid`,
+      approved_by_artist: true, approved_at: batch.signed_off_at || new Date().toISOString(),
+    })
+    // Auto-log escrow transfer for nett amount (warchest stays in escrow)
+    await supabase.from("transfers").insert({
+      artist_id: id, transfer_date: today,
+      description: `Batch ${note} artist payout (excl. warchest)`,
+      transfer_type: "Batch Payout", amount: payoutAmt,
     })
     await load()
   }
@@ -1021,6 +1028,7 @@ export default function ArtistDetailPage() {
                   <div className="text-center border-l pl-3">
                     <div className="text-xs text-gray-500 mb-1">Nett to Artist</div>
                     <div className="font-mono font-bold text-base text-green-700">{ZAR(batchTotals.nett)}</div>
+                    <div className="text-xs text-purple-600 mt-1">Warchest stays in escrow</div>
                   </div>
                 </div>
               )}

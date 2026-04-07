@@ -285,12 +285,12 @@ export default function ArtistDetailPage() {
   async function deleteBatch(batchId: string) {
     const batch = batches.find(b => b.id === batchId)
     if (!batch) return
-    const msg = batch.status === "Paid"
-      ? `Delete batch ${batch.batch_num}? This will also delete the linked payout record and revert show statuses.`
+    const isPaid = batch.status === "Paid" || batch.status === "Partially Paid"
+    const msg = isPaid
+      ? `Delete batch ${batch.batch_num}? This will also delete linked payout records and revert show statuses.`
       : `Delete batch ${batch.batch_num}? Show batch assignments will be cleared.`
     if (!window.confirm(msg)) return
-    // If paid, delete the linked payout and revert show statuses first (while batch_num still set)
-    if (batch.status === "Paid") {
+    if (isPaid) {
       await supabase.from("payouts").delete().eq("artist_id", id).eq("batch_ref", batch.batch_num)
       await supabase.from("shows").update({ status: "Fee Received" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
     }
@@ -386,27 +386,54 @@ export default function ArtistDetailPage() {
   }
 
   async function markBatchPaid(batchId: string) {
-    if (!window.confirm("Mark this batch as Paid? This will set all shows to 'All Paid', log the payout, and create the escrow transfer.")) return
     const batch = batches.find(b => b.id === batchId)
     if (!batch) return
     const payoutPct = batch.payout_pct || 100
+    const isPartial = payoutPct < 100
+    if (!window.confirm(`Mark this batch as ${isPartial ? `Partially Paid (${payoutPct}%)` : "Paid"}? This will log the payout and create the escrow transfer.`)) return
     const payoutAmt = Math.round(batch.total_nett * payoutPct / 100 * 100) / 100
     const today = new Date().toISOString().slice(0, 10)
-    const note  = `${batch.batch_num}${payoutPct < 100 ? ` (${payoutPct}%)` : ""}`
+    const note  = `${batch.batch_num}${isPartial ? ` (${payoutPct}%)` : ""}`
+    const newStatus = isPartial ? "Partially Paid" : "Paid"
 
-    await supabase.from("batches").update({ status: "Paid", paid_at: new Date().toISOString() }).eq("id", batchId)
-    await supabase.from("shows").update({ status: "All Paid" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
-    // Log artist payout
+    await supabase.from("batches").update({ status: newStatus, paid_at: new Date().toISOString() }).eq("id", batchId)
+    // Only set shows "All Paid" when fully paid
+    if (!isPartial) {
+      await supabase.from("shows").update({ status: "All Paid" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    }
     await supabase.from("payouts").insert({
       artist_id: id, payout_date: today, batch_ref: batch.batch_num,
-      amount: payoutAmt, notes: `Batch ${note} paid`,
+      amount: payoutAmt, notes: `Batch ${note} advance`,
       approved_by_artist: true, approved_at: batch.signed_off_at || new Date().toISOString(),
     })
-    // Auto-log escrow transfer for nett amount (warchest stays in escrow)
     await supabase.from("transfers").insert({
       artist_id: id, transfer_date: today,
       description: `Batch ${note} artist payout (excl. warchest)`,
       transfer_type: "Batch Payout", amount: payoutAmt,
+    })
+    await load()
+  }
+
+  async function payBatchBalance(batchId: string) {
+    const batch = batches.find(b => b.id === batchId)
+    if (!batch) return
+    // Calculate already paid for this batch
+    const alreadyPaid = payouts.filter(p => p.batch_ref === batch.batch_num).reduce((s, p) => s + p.amount, 0)
+    const remaining = Math.round((batch.total_nett - alreadyPaid) * 100) / 100
+    if (remaining <= 0) { alert("Nothing remaining to pay on this batch."); return }
+    if (!window.confirm(`Pay remaining balance of ${ZAR(remaining)} for ${batch.batch_num}?`)) return
+    const today = new Date().toISOString().slice(0, 10)
+    await supabase.from("batches").update({ status: "Paid" }).eq("id", batchId)
+    await supabase.from("shows").update({ status: "All Paid" }).eq("artist_id", id).eq("batch_num", batch.batch_num)
+    await supabase.from("payouts").insert({
+      artist_id: id, payout_date: today, batch_ref: batch.batch_num,
+      amount: remaining, notes: `Batch ${batch.batch_num} balance paid`,
+      approved_by_artist: true, approved_at: new Date().toISOString(),
+    })
+    await supabase.from("transfers").insert({
+      artist_id: id, transfer_date: today,
+      description: `Batch ${batch.batch_num} balance payout (excl. warchest)`,
+      transfer_type: "Batch Payout", amount: remaining,
     })
     await load()
   }
@@ -1140,6 +1167,7 @@ export default function ArtistDetailPage() {
                             <select className="text-xs" value={batchHistEdits.status} onChange={e => setBatchHistEdits(x => ({ ...x, status: e.target.value }))}>
                               <option>Pending Sign-Off</option>
                               <option>Signed Off</option>
+                              <option>Partially Paid</option>
                               <option>Paid</option>
                             </select>
                           </td>
@@ -1159,8 +1187,9 @@ export default function ArtistDetailPage() {
                           <td className="text-right font-mono font-semibold text-green-700">{ZAR(b.total_nett * (b.payout_pct || 100) / 100)}</td>
                           <td>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              b.status === "Paid"           ? "bg-green-100 text-green-700" :
-                              b.status === "Signed Off"     ? "bg-blue-100 text-blue-700" :
+                              b.status === "Paid"             ? "bg-green-100 text-green-700" :
+                              b.status === "Partially Paid"   ? "bg-orange-100 text-orange-700" :
+                              b.status === "Signed Off"       ? "bg-blue-100 text-blue-700" :
                               b.status === "Pending Sign-Off" ? "bg-yellow-100 text-yellow-700" :
                               "bg-gray-100 text-gray-500"
                             }`}>{b.status}</span>
@@ -1172,6 +1201,9 @@ export default function ArtistDetailPage() {
                             )}
                             {b.status === "Signed Off" && (
                               <button onClick={() => markBatchPaid(b.id)} className="text-xs text-green-700 font-medium hover:underline">Mark Paid</button>
+                            )}
+                            {b.status === "Partially Paid" && (
+                              <button onClick={() => payBatchBalance(b.id)} className="text-xs text-blue-600 font-medium hover:underline">Pay Balance</button>
                             )}
                             <button onClick={() => startEditBatchHist(b)} className="text-xs text-gray-500 hover:text-navy">Edit</button>
                             <button onClick={() => deleteBatch(b.id)} className="text-xs text-red-500 hover:text-red-700">Del</button>

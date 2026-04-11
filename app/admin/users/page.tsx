@@ -25,7 +25,8 @@ export default function UsersPage() {
   const [saving, setSaving]   = useState(false)
   const [token, setToken]     = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm]   = useState<{ is_admin: boolean; artist_id: string; agent_id: string }>({ is_admin: false, artist_id: "", agent_id: "" })
+  const [editForm, setEditForm]   = useState<{ email: string; is_admin: boolean; artist_id: string; agent_id: string }>({ email: "", is_admin: false, artist_id: "", agent_id: "" })
+  const [resetMsg, setResetMsg]   = useState("")
 
   // Invite form
   const [showInvite, setShowInvite] = useState(false)
@@ -59,7 +60,9 @@ export default function UsersPage() {
 
   function startEdit(u: UserRow) {
     setEditingId(u.id)
+    setResetMsg("")
     setEditForm({
+      email:     u.email || "",
       is_admin:  u.profile?.is_admin  || false,
       artist_id: u.profile?.artist_id || "",
       agent_id:  u.profile?.agent_id  || "",
@@ -77,6 +80,17 @@ export default function UsersPage() {
     setEditingId(null)
     await load()
     setSaving(false)
+  }
+
+  async function sendReset(userId: string, email: string) {
+    if (!token) return
+    setResetMsg("")
+    await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, send_reset: true }),
+    })
+    setResetMsg(`Password reset sent to ${email}`)
   }
 
   async function deleteUser(userId: string, email: string) {
@@ -200,7 +214,10 @@ export default function UsersPage() {
               <tbody>
                 {users.map(u => editingId === u.id ? (
                   <tr key={u.id} className="bg-blue-50">
-                    <td className="font-medium">{u.email}</td>
+                    <td>
+                      <input className="w-48 text-sm" type="email" value={editForm.email}
+                        onChange={e => setEditForm(x => ({ ...x, email: e.target.value }))} />
+                    </td>
                     <td>
                       <div className="flex items-center gap-2">
                         <input type="checkbox" className="w-auto" checked={editForm.is_admin}
@@ -226,7 +243,9 @@ export default function UsersPage() {
                     <td>{fmtDate(u.last_sign_in)}</td>
                     <td className="whitespace-nowrap space-x-2">
                       <button onClick={saveEdit} disabled={saving} className="text-xs text-green-700 font-medium">Save</button>
+                      <button onClick={() => sendReset(u.id, editForm.email)} className="text-xs text-bblue hover:underline">Send Reset</button>
                       <button onClick={() => setEditingId(null)} className="text-xs text-gray-500">Cancel</button>
+                      {resetMsg && <span className="text-xs text-green-600 block mt-1">{resetMsg}</span>}
                     </td>
                   </tr>
                 ) : (

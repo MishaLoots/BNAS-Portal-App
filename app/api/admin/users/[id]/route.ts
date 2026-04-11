@@ -19,13 +19,28 @@ async function verifyAdmin(req: NextRequest) {
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   if (!await verifyAdmin(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  const { is_admin, artist_id, agent_id } = await req.json()
+  const { is_admin, artist_id, agent_id, email, send_reset } = await req.json()
   const supabase = adminClient()
+
+  // Update auth user email if provided
+  if (email) {
+    const { error } = await supabase.auth.admin.updateUserById(params.id, { email })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // Send password reset email
+  if (send_reset && email) {
+    await supabase.auth.resetPasswordForEmail(email)
+  }
+
+  // Update profile
   await supabase.from("profiles").update({
-    is_admin: is_admin ?? false,
+    is_admin:  is_admin  ?? false,
     artist_id: artist_id || null,
     agent_id:  agent_id  || null,
+    ...(email ? { email } : {}),
   }).eq("id", params.id)
+
   return NextResponse.json({ success: true })
 }
 

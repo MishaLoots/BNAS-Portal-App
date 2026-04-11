@@ -226,17 +226,24 @@ export default function UsersPage() {
                       </div>
                     </td>
                     <td>
-                      <div className="flex gap-2">
-                        <select className="text-sm" value={editForm.artist_id}
-                          onChange={e => setEditForm(x => ({ ...x, artist_id: e.target.value, agent_id: "" }))}>
-                          <option value="">No artist</option>
-                          {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
-                        <select className="text-sm" value={editForm.agent_id}
-                          onChange={e => setEditForm(x => ({ ...x, agent_id: e.target.value, artist_id: "" }))}>
-                          <option value="">No agent</option>
-                          {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                        </select>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex gap-1 items-center">
+                          <span className="text-xs text-gray-500 w-10">Artist</span>
+                          <select className="text-sm" value={editForm.artist_id}
+                            onChange={e => setEditForm(x => ({ ...x, artist_id: e.target.value, agent_id: "" }))}>
+                            <option value="">— None —</option>
+                            {artists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex gap-1 items-center">
+                          <span className="text-xs text-gray-500 w-10">Agent</span>
+                          <select className="text-sm" value={editForm.agent_id}
+                            onChange={e => setEditForm(x => ({ ...x, agent_id: e.target.value, artist_id: "" }))}>
+                            <option value="">— None —</option>
+                            {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                        </div>
+                        <p className="text-xs text-gray-400">Select one only — artist or agent</p>
                       </div>
                     </td>
                     <td>{fmtDate(u.created_at)}</td>

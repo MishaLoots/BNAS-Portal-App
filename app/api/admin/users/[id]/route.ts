@@ -7,13 +7,18 @@ const adminClient = () => createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+const anonClient = () => createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
+
 async function verifyAdmin(req: NextRequest) {
   const token = req.headers.get("authorization")?.replace("Bearer ", "")
   if (!token) return false
-  const supabase = adminClient()
-  const { data: { user } } = await supabase.auth.getUser(token)
+  const { data: { user } } = await anonClient().auth.getUser(token)
   if (!user) return false
-  const { data: profile } = await supabase.from("profiles").select("is_admin").eq("id", user.id).single()
+  const { data: profile } = await adminClient().from("profiles").select("is_admin").eq("id", user.id).single()
   return profile?.is_admin === true
 }
 

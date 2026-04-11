@@ -133,6 +133,11 @@ export default function AdminPage() {
       <Navbar title="Admin Dashboard" isAdmin />
       <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
 
+        {/* Top actions */}
+        <div className="flex justify-end gap-2">
+          <button onClick={() => router.push("/admin/users")} className="btn-secondary text-sm">⚙ Manage Users</button>
+        </div>
+
         {/* Summary Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="stat-card">

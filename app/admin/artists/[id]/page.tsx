@@ -60,7 +60,9 @@ export default function ArtistDetailPage() {
   const [batchSelected, setBatchSelected] = useState<Set<string>>(new Set())
   const [batchSaving, setBatchSaving]     = useState(false)
   const [batchNumInput, setBatchNumInput] = useState("")
-  const [batchPayoutPct, setBatchPayoutPct] = useState("100")
+  const [batchPayoutPct, setBatchPayoutPct]   = useState("100")
+  const [batchPayoutMode, setBatchPayoutMode] = useState<"pct" | "rand">("pct")
+  const [batchPayoutRand, setBatchPayoutRand] = useState("")
   const [batches, setBatches]             = useState<Batch[]>([])
 
   // Batch edit/delete
@@ -348,6 +350,16 @@ export default function ArtistDetailPage() {
     await supabase.from("shows")
       .update({ batch_num: batchNumInput.trim() })
       .in("id", Array.from(batchSelected))
+    // Compute effective payout pct
+    let effectivePct = 100
+    if (batchPayoutMode === "pct") {
+      effectivePct = parseFloat(batchPayoutPct) || 100
+    } else {
+      const rVal = parseFloat(batchPayoutRand) || 0
+      effectivePct = totals.nett > 0 ? Math.round((rVal / totals.nett) * 10000) / 100 : 100
+    }
+    effectivePct = Math.min(100, Math.max(1, effectivePct))
+
     await supabase.from("batches").insert({
       artist_id:     id,
       batch_num:     batchNumInput.trim(),
@@ -365,12 +377,14 @@ export default function ArtistDetailPage() {
       mus2_name:     artist?.mus2_name || null,
       mus3_name:     artist?.mus3_name || null,
       mus4_name:     artist?.mus4_name || null,
-      payout_pct:    parseFloat(batchPayoutPct) || 100,
+      payout_pct:    effectivePct,
       status:        "Pending Sign-Off",
     })
     setBatchSelected(new Set())
     setBatchNumInput("")
     setBatchPayoutPct("100")
+    setBatchPayoutRand("")
+    setBatchPayoutMode("pct")
     await load()
     setBatchSaving(false)
   }
@@ -1009,17 +1023,26 @@ export default function ArtistDetailPage() {
                       onChange={e => setBatchNumInput(e.target.value)}
                     />
                     <div className="flex items-center gap-1">
-                      <input
-                        type="number" min="1" max="100" className="w-20 text-right"
-                        placeholder="100"
-                        value={batchPayoutPct}
-                        onChange={e => setBatchPayoutPct(e.target.value)}
-                      />
-                      <span className="text-sm text-gray-500">% payout</span>
+                      <div className="flex rounded border border-gray-300 overflow-hidden text-xs">
+                        <button onClick={() => setBatchPayoutMode("pct")} className={`px-2 py-1 ${batchPayoutMode === "pct" ? "bg-navy text-white" : "bg-white text-gray-500"}`}>%</button>
+                        <button onClick={() => setBatchPayoutMode("rand")} className={`px-2 py-1 ${batchPayoutMode === "rand" ? "bg-navy text-white" : "bg-white text-gray-500"}`}>R</button>
+                      </div>
+                      {batchPayoutMode === "pct" ? (
+                        <input type="number" min="1" max="100" className="w-20 text-right"
+                          placeholder="100" value={batchPayoutPct}
+                          onChange={e => setBatchPayoutPct(e.target.value)} />
+                      ) : (
+                        <input type="number" min="0" className="w-28 text-right"
+                          placeholder="R amount" value={batchPayoutRand}
+                          onChange={e => setBatchPayoutRand(e.target.value)} />
+                      )}
+                      <span className="text-sm text-gray-500">{batchPayoutMode === "pct" ? "% payout" : "advance"}</span>
                     </div>
                     {batchTotals.nett > 0 && (
                       <span className="text-sm font-mono text-green-700">
-                        = {ZAR(batchTotals.nett * (parseFloat(batchPayoutPct) || 100) / 100)}
+                        = {ZAR(batchPayoutMode === "pct"
+                          ? batchTotals.nett * (parseFloat(batchPayoutPct) || 100) / 100
+                          : Math.min(parseFloat(batchPayoutRand) || 0, batchTotals.nett))}
                       </span>
                     )}
                     <button

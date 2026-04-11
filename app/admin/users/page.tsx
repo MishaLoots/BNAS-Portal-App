@@ -16,17 +16,31 @@ interface UserRow {
 
 interface Option { id: string; name: string }
 
+interface ArtistSplits {
+  id: string; name: string
+  bnas_overhead_pct: number
+  misha_split_pct: number; gareth_split_pct: number
+  jako_split_pct: number;  que_split_pct: number
+  unalloc_split_pct: number
+}
+
 export default function UsersPage() {
   const router = useRouter()
-  const [users, setUsers]     = useState<UserRow[]>([])
-  const [artists, setArtists] = useState<Option[]>([])
-  const [agents, setAgents]   = useState<Option[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving]   = useState(false)
-  const [token, setToken]     = useState<string | null>(null)
+  const [users, setUsers]         = useState<UserRow[]>([])
+  const [artists, setArtists]     = useState<Option[]>([])
+  const [agents, setAgents]       = useState<Option[]>([])
+  const [artistSplits, setArtistSplits] = useState<ArtistSplits[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [saving, setSaving]       = useState(false)
+  const [token, setToken]         = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm]   = useState<{ email: string; is_admin: boolean; artist_id: string; agent_id: string }>({ email: "", is_admin: false, artist_id: "", agent_id: "" })
   const [resetMsg, setResetMsg]   = useState("")
+
+  // Splits editing
+  const [editingSplitId, setEditingSplitId] = useState<string | null>(null)
+  const [splitEdits, setSplitEdits] = useState<Omit<ArtistSplits, "id" | "name">>({ bnas_overhead_pct: 0.2, misha_split_pct: 0, gareth_split_pct: 0, jako_split_pct: 0, que_split_pct: 0, unalloc_split_pct: 0 })
+  const [splitSaving, setSplitSaving] = useState(false)
 
   // Invite form
   const [showInvite, setShowInvite] = useState(false)
@@ -41,14 +55,47 @@ export default function UsersPage() {
     if (!profile?.is_admin) { router.replace("/admin"); return }
     setToken(session.access_token)
 
-    const res = await fetch("/api/admin/users", {
-      headers: { Authorization: `Bearer ${session.access_token}` }
-    })
+    const [res, { data: splits }] = await Promise.all([
+      fetch("/api/admin/users", { headers: { Authorization: `Bearer ${session.access_token}` } }),
+      supabase.from("artists").select("id,name,bnas_overhead_pct,misha_split_pct,gareth_split_pct,jako_split_pct,que_split_pct,unalloc_split_pct").order("name"),
+    ])
     const json = await res.json()
     setUsers(json.users || [])
     setArtists(json.artists || [])
     setAgents(json.agents || [])
+    setArtistSplits(splits || [])
     setLoading(false)
+  }
+
+  function startEditSplit(a: ArtistSplits) {
+    setEditingSplitId(a.id)
+    setSplitEdits({ bnas_overhead_pct: a.bnas_overhead_pct, misha_split_pct: a.misha_split_pct, gareth_split_pct: a.gareth_split_pct, jako_split_pct: a.jako_split_pct, que_split_pct: a.que_split_pct, unalloc_split_pct: a.unalloc_split_pct })
+  }
+
+  async function saveSplitEdit() {
+    if (!editingSplitId) return
+    setSplitSaving(true)
+    await supabase.from("artists").update(splitEdits).eq("id", editingSplitId)
+    setEditingSplitId(null)
+    await load()
+    setSplitSaving(false)
+  }
+
+  function pctInput(field: keyof typeof splitEdits) {
+    return (
+      <input
+        type="number" step="0.01" min="0" max="1" className="w-16 text-right text-xs"
+        value={splitEdits[field]}
+        onChange={e => setSplitEdits(x => ({ ...x, [field]: parseFloat(e.target.value) || 0 }))}
+      />
+    )
+  }
+
+  function splitTotal(a: ArtistSplits) {
+    return ((a.misha_split_pct + a.gareth_split_pct + a.jako_split_pct + a.que_split_pct + a.unalloc_split_pct) * 100).toFixed(0)
+  }
+  function editTotal() {
+    return ((splitEdits.misha_split_pct + splitEdits.gareth_split_pct + splitEdits.jako_split_pct + splitEdits.que_split_pct + splitEdits.unalloc_split_pct) * 100).toFixed(0)
   }
 
   useEffect(() => { load() }, [])
@@ -282,6 +329,67 @@ export default function UsersPage() {
             </table>
           </div>
         </div>
+        {/* Commission Splits */}
+        <div className="card p-0">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="font-semibold text-navy">Commission Splits by Artist</h2>
+            <p className="text-xs text-gray-500 mt-1">BNAS% is overhead taken first. Remaining splits must total 100%.</p>
+          </div>
+          <div className="table-wrap rounded-none rounded-b-xl">
+            <table>
+              <thead>
+                <tr>
+                  <th>Artist</th>
+                  <th className="text-right">BNAS%</th>
+                  <th className="text-right">Misha%</th>
+                  <th className="text-right">Gareth%</th>
+                  <th className="text-right">Jako%</th>
+                  <th className="text-right">Que%</th>
+                  <th className="text-right">Unalloc%</th>
+                  <th className="text-right">Total%</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {artistSplits.map(a => editingSplitId === a.id ? (
+                  <tr key={a.id} className="bg-blue-50">
+                    <td className="font-medium">{a.name}</td>
+                    <td className="text-right">{pctInput("bnas_overhead_pct")}</td>
+                    <td className="text-right">{pctInput("misha_split_pct")}</td>
+                    <td className="text-right">{pctInput("gareth_split_pct")}</td>
+                    <td className="text-right">{pctInput("jako_split_pct")}</td>
+                    <td className="text-right">{pctInput("que_split_pct")}</td>
+                    <td className="text-right">{pctInput("unalloc_split_pct")}</td>
+                    <td className={`text-right text-xs font-semibold ${editTotal() === "100" ? "text-green-700" : "text-red-600"}`}>
+                      {editTotal()}%
+                    </td>
+                    <td className="whitespace-nowrap space-x-2">
+                      <button onClick={saveSplitEdit} disabled={splitSaving} className="text-xs text-green-700 font-medium">Save</button>
+                      <button onClick={() => setEditingSplitId(null)} className="text-xs text-gray-500">Cancel</button>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={a.id}>
+                    <td className="font-medium">{a.name}</td>
+                    <td className="text-right text-gray-600">{(a.bnas_overhead_pct * 100).toFixed(0)}%</td>
+                    <td className="text-right text-gray-600">{(a.misha_split_pct * 100).toFixed(0)}%</td>
+                    <td className="text-right text-gray-600">{(a.gareth_split_pct * 100).toFixed(0)}%</td>
+                    <td className="text-right text-gray-600">{(a.jako_split_pct * 100).toFixed(0)}%</td>
+                    <td className="text-right text-gray-600">{(a.que_split_pct * 100).toFixed(0)}%</td>
+                    <td className="text-right text-gray-600">{(a.unalloc_split_pct * 100).toFixed(0)}%</td>
+                    <td className={`text-right text-xs font-semibold ${splitTotal(a) === "100" ? "text-green-700" : "text-red-600"}`}>
+                      {splitTotal(a)}%
+                    </td>
+                    <td>
+                      <button onClick={() => startEditSplit(a)} className="text-xs text-bblue hover:text-navy">Edit</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </main>
     </div>
   )

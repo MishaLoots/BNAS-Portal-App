@@ -36,6 +36,7 @@ export default function UsersPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm]   = useState<{ email: string; is_admin: boolean; artist_id: string; agent_id: string }>({ email: "", is_admin: false, artist_id: "", agent_id: "" })
   const [resetMsg, setResetMsg]   = useState("")
+  const [saveError, setSaveError]   = useState("")
 
   // Splits editing
   const [editingSplitId, setEditingSplitId] = useState<string | null>(null)
@@ -119,11 +120,14 @@ export default function UsersPage() {
   async function saveEdit() {
     if (!editingId || !token) return
     setSaving(true)
-    await fetch(`/api/admin/users/${editingId}`, {
+    setSaveError("")
+    const res = await fetch(`/api/admin/users/${editingId}`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ ...editForm, artist_id: editForm.artist_id || null, agent_id: editForm.agent_id || null }),
     })
+    const json = await res.json()
+    if (!res.ok) { setSaveError(json.error || "Save failed"); setSaving(false); return }
     setEditingId(null)
     await load()
     setSaving(false)
@@ -296,7 +300,8 @@ export default function UsersPage() {
                     <td>{fmtDate(u.created_at)}</td>
                     <td>{fmtDate(u.last_sign_in)}</td>
                     <td className="whitespace-nowrap space-x-2">
-                      <button onClick={saveEdit} disabled={saving} className="text-xs text-green-700 font-medium">Save</button>
+                      {saveError && <span className="text-xs text-red-600">{saveError}</span>}
+                      <button onClick={saveEdit} disabled={saving} className="text-xs text-green-700 font-medium">{saving ? "Saving…" : "Save"}</button>
                       <button onClick={() => sendReset(u.id, editForm.email)} className="text-xs text-bblue hover:underline">Send Reset</button>
                       <button onClick={() => setEditingId(null)} className="text-xs text-gray-500">Cancel</button>
                       {resetMsg && <span className="text-xs text-green-600 block mt-1">{resetMsg}</span>}

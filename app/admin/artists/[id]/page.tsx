@@ -1109,6 +1109,7 @@ export default function ArtistDetailPage() {
                 </select>
                 {(batchSearch||batchFrom||batchTo||batchPayType) && <button className="text-xs text-gray-400 hover:text-gray-600" onClick={() => { setBatchSearch(""); setBatchFrom(""); setBatchTo(""); setBatchPayType("") }}>Clear</button>}
                 <span className="ml-auto text-xs text-gray-500">{filteredBatchShows.length} of {batchShows.length} shows</span>
+              </div>
               <div className="table-wrap">
                 <table>
                   <thead>

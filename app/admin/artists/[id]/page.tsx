@@ -86,6 +86,10 @@ export default function ArtistDetailPage() {
   const [filterAgent, setFilterAgent]   = useState("")
   const [filterStatus, setFilterStatus] = useState("")
   const [filterFrom, setFilterFrom]     = useState("")
+  const [batchSearch, setBatchSearch]   = useState("")
+  const [batchFrom, setBatchFrom]       = useState("")
+  const [batchTo, setBatchTo]           = useState("")
+  const [batchPayType, setBatchPayType] = useState("")
   const [filterTo, setFilterTo]         = useState("")
 
   async function load() {
@@ -485,6 +489,13 @@ export default function ArtistDetailPage() {
 
   // Batch: shows excluding Cancelled and already-batched
   const batchShows = shows.filter(s => s.status !== "Cancelled" && !s.batch_num)
+  const filteredBatchShows = batchShows.filter(s => {
+    if (batchSearch && !s.event?.toLowerCase().includes(batchSearch.toLowerCase())) return false
+    if (batchFrom && s.show_date < batchFrom) return false
+    if (batchTo   && s.show_date > batchTo)   return false
+    if (batchPayType && s.pay_type !== batchPayType) return false
+    return true
+  })
   const batchSel   = batchShows.filter(s => batchSelected.has(s.id))
   const batchTotals = batchSel.reduce(
     (acc, s) => {
@@ -1087,6 +1098,17 @@ export default function ArtistDetailPage() {
             </div>
 
             <div className="card p-0">
+              <div className="px-4 py-3 border-b flex flex-wrap gap-3 items-end bg-gray-50">
+                <input className="text-sm h-8 px-2 border rounded w-40" placeholder="Search event…" value={batchSearch} onChange={e => setBatchSearch(e.target.value)} />
+                <input type="date" className="text-sm h-8 px-2 border rounded" value={batchFrom} onChange={e => setBatchFrom(e.target.value)} />
+                <span className="text-xs text-gray-400">to</span>
+                <input type="date" className="text-sm h-8 px-2 border rounded" value={batchTo} onChange={e => setBatchTo(e.target.value)} />
+                <select className="text-sm h-8 px-2 border rounded" value={batchPayType} onChange={e => setBatchPayType(e.target.value)}>
+                  <option value="">All pay types</option>
+                  <option>Escrow</option><option>Direct</option>
+                </select>
+                {(batchSearch||batchFrom||batchTo||batchPayType) && <button className="text-xs text-gray-400 hover:text-gray-600" onClick={() => { setBatchSearch(""); setBatchFrom(""); setBatchTo(""); setBatchPayType("") }}>Clear</button>}
+                <span className="ml-auto text-xs text-gray-500">{filteredBatchShows.length} of {batchShows.length} shows</span>
               <div className="table-wrap">
                 <table>
                   <thead>
@@ -1095,8 +1117,8 @@ export default function ArtistDetailPage() {
                         <input
                           type="checkbox"
                           className="w-auto"
-                          checked={batchShows.length > 0 && batchShows.every(s => batchSelected.has(s.id))}
-                          onChange={() => toggleAllBatch(batchShows)}
+                          checked={filteredBatchShows.length > 0 && filteredBatchShows.every(s => batchSelected.has(s.id))}
+                          onChange={() => toggleAllBatch(filteredBatchShows)}
                         />
                       </th>
                       <th>Date</th><th>Event</th><th>Type</th><th>Pay</th>
@@ -1114,7 +1136,7 @@ export default function ArtistDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {batchShows.map(s => {
+                    {filteredBatchShows.map(s => {
                       const c = calcShow(s)
                       const selected = batchSelected.has(s.id)
                       const isEscrow = s.pay_type === "Escrow"

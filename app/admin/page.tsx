@@ -136,6 +136,7 @@ export default function AdminPage() {
         {/* Top actions */}
         <div className="flex justify-end gap-2">
           <button onClick={() => router.push("/admin/users")} className="btn-secondary text-sm">⚙ Manage Users</button>
+          <button onClick={() => router.push("/admin/agent-payouts")} className="btn-secondary text-sm">💳 Agent Payouts</button>
         </div>
 
         {/* Summary Stats */}

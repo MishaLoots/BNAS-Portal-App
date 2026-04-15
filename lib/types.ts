@@ -59,6 +59,7 @@ export interface Show {
   dep_is_pre: boolean
   notes: string | null
   invoiced_client: string | null
+  agent_batch_ref: string | null
 }
 
 export interface Transfer {

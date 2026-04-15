@@ -128,7 +128,7 @@ export default function AgentPayoutsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
+      <Navbar title="Agent Payouts" isAdmin={true} />
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
 
         <div className="flex items-center gap-4">

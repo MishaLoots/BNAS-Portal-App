@@ -2,279 +2,200 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { calcAgentEarned } from "@/lib/calculations"
+import type { Show, Artist } from "@/lib/types"
 import Navbar from "@/components/Navbar"
-import type { Agent, AgentPayout, Artist, Show } from "@/lib/types"
-import { ZAR, calcAgentEarned } from "@/lib/calculations"
 
-function fmtDate(s: string | null | undefined): string {
+function ZAR(n: number) {
+  return "R " + (n || 0).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+function fmtDate(s: string | null | undefined) {
   if (!s) return "—"
-  const d = new Date(s + "T00:00:00")
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+  return new Date(s.includes("T") ? s : s + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
 }
 
-type Tab = "summary" | "shows" | "payouts"
-
-interface ShowWithArtist extends Show {
+interface ShowRow {
+  show: Show
   artist: Artist
-  agentEarned: number
+  earned: number
 }
 
 export default function AgentPage() {
   const router = useRouter()
-  const [tab, setTab]       = useState<Tab>("summary")
-  const [agent, setAgent]   = useState<Agent | null>(null)
-  const [rows, setRows]     = useState<ShowWithArtist[]>([])
-  const [payouts, setPayouts] = useState<AgentPayout[]>([])
-  const [loading, setLoading] = useState(true)
+  const [agentName, setAgentName]   = useState("")
+  const [showRows, setShowRows]     = useState<ShowRow[]>([])
+  const [loading, setLoading]       = useState(true)
 
-  useEffect(() => {
-    async function load() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.replace("/login"); return }
+  // Filters
+  const [search, setSearch]     = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo]     = useState("")
+  const [statusF, setStatusF]   = useState("")
+  const [artistF, setArtistF]   = useState("")
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("is_admin, agent_id")
-        .eq("id", session.user.id)
-        .single()
+  useEffect(() => { load() }, [])
 
-      if (profile?.is_admin) { router.replace("/admin"); return }
-      if (!profile?.agent_id) { router.replace("/artist"); return }
+  async function load() {
+    setLoading(true)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { router.replace("/login"); return }
 
-      const [{ data: agentData }, { data: artists }, { data: agentPayouts }] = await Promise.all([
-        supabase.from("agents").select("*").eq("id", profile.agent_id).single(),
-        supabase.from("artists").select("*"),
-        supabase.from("agent_payouts").select("*").eq("agent_id", profile.agent_id).order("payout_date"),
-      ])
+    const { data: profile } = await supabase.from("profiles").select("agent_id, is_admin").eq("id", session.user.id).single()
+    if (!profile?.agent_id) { router.replace("/login"); return }
 
-      if (!agentData || !artists) { setLoading(false); return }
-      setAgent(agentData)
-      setPayouts(agentPayouts || [])
+    const { data: agent } = await supabase.from("agents").select("name").eq("id", profile.agent_id).single()
+    if (!agent) { router.replace("/login"); return }
+    setAgentName(agent.name)
 
-      // Load all shows for all artists, compute agent's cut per show
-      const allShows: ShowWithArtist[] = []
-      for (const artist of artists) {
-        const { data: shows } = await supabase
-          .from("shows")
-          .select("*")
-          .eq("artist_id", artist.id)
-          .order("show_date")
+    // Fetch all artists + their shows where this agent is responsible or secondary
+    const { data: artists } = await supabase.from("artists").select("*")
+    const { data: shows }   = await supabase.from("shows").select("*")
+      .or(`responsible_agent.eq.${agent.name},secondary_agent.eq.${agent.name}`)
+      .order("show_date", { ascending: false })
 
-        for (const show of (shows || [])) {
-          const earned = calcAgentEarned(show, artist, agentData.name)
-          if (earned > 0 || agentData.name.toLowerCase() === "que") {
-            allShows.push({ ...show, artist, agentEarned: earned })
-          }
-        }
-      }
-      // Sort by date
-      allShows.sort((a, b) => a.show_date.localeCompare(b.show_date))
-      setRows(allShows)
-      setLoading(false)
-    }
-    load()
-  }, [router])
+    if (!shows || !artists) { setLoading(false); return }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-gray-400">Loading…</div>
-  )
-  if (!agent) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="card text-center">
-        <p className="text-gray-500">No agent profile linked. Contact BNAS.</p>
-      </div>
-    </div>
-  )
+    const rows: ShowRow[] = shows.map(show => {
+      const artist = artists.find(a => a.id === show.artist_id) as Artist
+      if (!artist) return null
+      return { show, artist, earned: calcAgentEarned(show, artist, agent.name) }
+    }).filter(Boolean) as ShowRow[]
 
-  const totalEarned = rows.reduce((s, r) => s + r.agentEarned, 0)
-  const totalPaid   = payouts.reduce((s, p) => s + p.amount, 0)
-  const balance     = totalEarned - totalPaid
+    setShowRows(rows)
+    setLoading(false)
+  }
+
+  const filtered = showRows.filter(r => {
+    if (search && !r.show.event?.toLowerCase().includes(search.toLowerCase()) && !r.artist.name?.toLowerCase().includes(search.toLowerCase())) return false
+    if (dateFrom && r.show.show_date < dateFrom) return false
+    if (dateTo   && r.show.show_date > dateTo)   return false
+    if (statusF  && r.show.status !== statusF)    return false
+    if (artistF  && r.artist.id !== artistF)      return false
+    return true
+  })
+
+  const totalEarned = filtered.reduce((sum, r) => sum + r.earned, 0)
+  const totalGross  = filtered.reduce((sum, r) => sum + r.show.gross, 0)
+
+  const uniqueArtists = Array.from(new Map(showRows.map(r => [r.artist.id, r.artist])).values())
+
+  function clearFilters() {
+    setSearch(""); setDateFrom(""); setDateTo(""); setStatusF(""); setArtistF("")
+  }
+  const hasFilter = search || dateFrom || dateTo || statusF || artistF
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar title={`${agent.name} — Agent Portal`} isAdmin={false} />
-      <main className="flex-1 p-4 sm:p-6 max-w-6xl mx-auto w-full space-y-4">
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-          {(["summary", "shows", "payouts"] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
-                tab === t ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-gray-700"
-              }`}>
-              {t}
-            </button>
-          ))}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-navy">{agentName}</h1>
+            <p className="text-sm text-gray-500">Agent Portal</p>
+          </div>
         </div>
 
-        {/* ── SUMMARY ── */}
-        {tab === "summary" && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="stat-card">
-                <div className="stat-label">Total Earned (YTD)</div>
-                <div className="stat-value">{ZAR(totalEarned)}</div>
-                <div className="stat-sub">{rows.length} shows</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Total Paid Out</div>
-                <div className="stat-value">{ZAR(totalPaid)}</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-label">Balance Owed</div>
-                <div className={`stat-value ${balance < 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(balance)}</div>
-              </div>
-            </div>
-
-            {/* Breakdown by artist */}
-            <div className="card p-0">
-              <div className="px-6 py-4 border-b">
-                <h2 className="font-semibold text-navy">Earnings by Artist</h2>
-              </div>
-              <div className="table-wrap rounded-none rounded-b-xl">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Artist</th>
-                      <th className="text-center">Shows</th>
-                      <th className="text-right">Total Gross</th>
-                      <th className="text-right">Total Commission</th>
-                      <th className="text-right">Your Cut</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from(new Set(rows.map(r => r.artist_id))).map(aid => {
-                      const artistRows = rows.filter(r => r.artist_id === aid)
-                      const artist = artistRows[0].artist
-                      return (
-                        <tr key={aid}>
-                          <td className="font-medium">{artist.name}</td>
-                          <td className="text-center text-gray-500">{artistRows.length}</td>
-                          <td className="text-right font-mono">{ZAR(artistRows.reduce((s, r) => s + r.gross, 0))}</td>
-                          <td className="text-right font-mono text-gray-600">{ZAR(artistRows.reduce((s, r) => s + r.gross * r.comm_pct, 0))}</td>
-                          <td className="text-right font-mono font-semibold">{ZAR(artistRows.reduce((s, r) => s + r.agentEarned, 0))}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-lblue font-semibold">
-                      <td>TOTALS</td>
-                      <td className="text-center">{rows.length}</td>
-                      <td className="text-right font-mono">{ZAR(rows.reduce((s, r) => s + r.gross, 0))}</td>
-                      <td className="text-right font-mono">{ZAR(rows.reduce((s, r) => s + r.gross * r.comm_pct, 0))}</td>
-                      <td className="text-right font-mono">{ZAR(totalEarned)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="card p-5">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Shows {hasFilter ? "(filtered)" : "(all)"}</p>
+            <p className="text-2xl font-bold text-navy mt-1">{filtered.length}</p>
           </div>
-        )}
+          <div className="card p-5">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Earned {hasFilter ? "(filtered)" : "(all)"}</p>
+            <p className="text-2xl font-bold text-green-700 mt-1">{ZAR(totalEarned)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">on {ZAR(totalGross)} gross</p>
+          </div>
+        </div>
 
-        {/* ── SHOWS ── */}
-        {tab === "shows" && (
-          <div className="card p-0">
-            <div className="px-6 py-4 border-b">
-              <h2 className="font-semibold text-navy">All Shows — Your Earnings</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Your cut = Commission × (1 − BNAS overhead) × your split %</p>
-            </div>
-            <div className="table-wrap rounded-none rounded-b-xl">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Artist</th>
-                    <th>Event</th>
-                    <th>Type</th>
-                    <th className="text-right">Gross</th>
-                    <th className="text-right">Comm</th>
-                    <th className="text-right">To Split</th>
-                    <th className="text-right">Your Cut</th>
-                    <th>Status</th>
+        {/* Show log with filters */}
+        <div className="card p-0">
+          <div className="px-6 py-4 border-b">
+            <h2 className="font-semibold text-navy">Show Log</h2>
+          </div>
+
+          {/* Filter bar */}
+          <div className="px-6 py-3 border-b flex flex-wrap gap-3 items-end bg-gray-50">
+            <input
+              className="text-sm h-8 px-2 border rounded w-40"
+              placeholder="Search event / artist…"
+              value={search} onChange={e => setSearch(e.target.value)}
+            />
+            <select className="text-sm h-8 px-2 border rounded" value={artistF} onChange={e => setArtistF(e.target.value)}>
+              <option value="">All artists</option>
+              {uniqueArtists.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            <input type="date" className="text-sm h-8 px-2 border rounded" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            <span className="text-xs text-gray-400">to</span>
+            <input type="date" className="text-sm h-8 px-2 border rounded" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            <select className="text-sm h-8 px-2 border rounded" value={statusF} onChange={e => setStatusF(e.target.value)}>
+              <option value="">All statuses</option>
+              <option>Pending</option>
+              <option>Fee Received</option>
+              <option>All Paid</option>
+              <option>Cancelled</option>
+            </select>
+            {hasFilter && (
+              <button className="text-xs text-gray-400 hover:text-gray-600" onClick={clearFilters}>Clear</button>
+            )}
+            <span className="ml-auto text-xs text-gray-500">{filtered.length} show{filtered.length !== 1 ? "s" : ""}</span>
+          </div>
+
+          <div className="table-wrap rounded-none rounded-b-xl">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Artist</th>
+                  <th>Event</th>
+                  <th className="text-right">Gross</th>
+                  <th>Role</th>
+                  <th className="text-right">Earned</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && (
+                  <tr><td colSpan={7} className="text-center text-gray-400 py-8">No shows match your filters</td></tr>
+                )}
+                {filtered.map(({ show: s, artist: a, earned }) => (
+                  <tr key={s.id}>
+                    <td className="text-gray-500 whitespace-nowrap">{fmtDate(s.show_date)}</td>
+                    <td className="font-medium">{a.name}</td>
+                    <td>{s.event}</td>
+                    <td className="text-right font-mono">{ZAR(s.gross)}</td>
+                    <td className="text-xs text-gray-500">
+                      {(s.responsible_agent || "").toLowerCase() === agentName.toLowerCase() ? "Main" : "Secondary"}
+                    </td>
+                    <td className="text-right font-mono font-semibold text-green-700">{ZAR(earned)}</td>
+                    <td>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        s.status === "All Paid"     ? "bg-green-100 text-green-700" :
+                        s.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
+                        s.status === "Pending"      ? "bg-yellow-100 text-yellow-700" :
+                        "bg-gray-100 text-gray-500"
+                      }`}>{s.status || "—"}</span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map(r => {
-                    const comm    = r.gross * r.comm_pct
-                    const toSplit = comm * (1 - (r.artist.bnas_overhead_pct || 0.2))
-                    return (
-                      <tr key={r.id}>
-                        <td className="text-gray-500 whitespace-nowrap">{fmtDate(r.show_date)}</td>
-                        <td className="text-gray-600 text-sm">{r.artist.name}</td>
-                        <td className="font-medium">{r.event}</td>
-                        <td className="text-gray-500">{r.show_type}</td>
-                        <td className="text-right font-mono">{ZAR(r.gross)}</td>
-                        <td className="text-right font-mono text-gray-600">{ZAR(comm)}</td>
-                        <td className="text-right font-mono text-gray-600">{ZAR(toSplit)}</td>
-                        <td className="text-right font-mono font-semibold">{ZAR(r.agentEarned)}</td>
-                        <td>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            r.status === "All Paid" ? "bg-green-100 text-green-700" :
-                            r.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
-                            r.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
-                            "bg-gray-100 text-gray-500"
-                          }`}>{r.status || "—"}</span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
+                ))}
+              </tbody>
+              {filtered.length > 0 && (
                 <tfoot>
                   <tr className="bg-lblue font-semibold">
-                    <td colSpan={4}>TOTALS</td>
-                    <td className="text-right font-mono">{ZAR(rows.reduce((s, r) => s + r.gross, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(rows.reduce((s, r) => s + r.gross * r.comm_pct, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(rows.reduce((s, r) => s + r.gross * r.comm_pct * (1 - (r.artist.bnas_overhead_pct || 0.2)), 0))}</td>
-                    <td className="text-right font-mono">{ZAR(totalEarned)}</td>
+                    <td colSpan={3}>TOTALS ({filtered.length})</td>
+                    <td className="text-right font-mono">{ZAR(totalGross)}</td>
+                    <td></td>
+                    <td className="text-right font-mono text-green-700">{ZAR(totalEarned)}</td>
                     <td></td>
                   </tr>
                 </tfoot>
-              </table>
-            </div>
+              )}
+            </table>
           </div>
-        )}
-
-        {/* ── PAYOUTS ── */}
-        {tab === "payouts" && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div className="stat-card"><div className="stat-label">Total Earned</div><div className="stat-value">{ZAR(totalEarned)}</div></div>
-              <div className="stat-card"><div className="stat-label">Total Paid Out</div><div className="stat-value">{ZAR(totalPaid)}</div></div>
-              <div className="stat-card"><div className="stat-label">Balance Owed</div><div className={`stat-value ${balance < 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(balance)}</div></div>
-            </div>
-            <div className="card p-0">
-              <div className="px-6 py-4 border-b">
-                <h2 className="font-semibold text-navy">Payout History</h2>
-              </div>
-              <div className="table-wrap rounded-none rounded-b-xl">
-                <table>
-                  <thead><tr><th>Date</th><th>Description</th><th className="text-right">Amount</th></tr></thead>
-                  <tbody>
-                    {payouts.length === 0 && (
-                      <tr><td colSpan={3} className="text-center text-gray-400 py-6">No payouts recorded yet</td></tr>
-                    )}
-                    {payouts.map(p => (
-                      <tr key={p.id}>
-                        <td className="whitespace-nowrap">{fmtDate(p.payout_date)}</td>
-                        <td>{p.description}</td>
-                        <td className="text-right font-mono font-semibold">{ZAR(p.amount)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  {payouts.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-lblue font-semibold">
-                        <td colSpan={2}>TOTAL PAID</td>
-                        <td className="text-right font-mono">{ZAR(totalPaid)}</td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
 
       </main>
     </div>

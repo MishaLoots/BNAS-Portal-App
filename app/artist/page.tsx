@@ -28,6 +28,10 @@ export default function ArtistPage() {
   const [editingBatchId, setEditingBatchId] = useState<string | null>(null)
   const [batchEdits, setBatchEdits] = useState<Record<string, string>>({})
   const [savingEdits, setSavingEdits] = useState(false)
+  const [showSearch, setShowSearch] = useState("")
+  const [showFrom, setShowFrom]     = useState("")
+  const [showTo, setShowTo]         = useState("")
+  const [showStatus, setShowStatus] = useState("")
 
   useEffect(() => {
     async function load() {
@@ -133,6 +137,14 @@ export default function ArtistPage() {
   const paid = payouts.reduce((s, p) => s + p.amount, 0)
   const owed = nettOwed(shows)
   const due  = owed - paid
+  const filteredShows = shows.filter(s => {
+    if (showSearch && !s.event?.toLowerCase().includes(showSearch.toLowerCase()) && !s.show_type?.toLowerCase().includes(showSearch.toLowerCase())) return false
+    if (showFrom && s.show_date < showFrom) return false
+    if (showTo   && s.show_date > showTo)   return false
+    if (showStatus && s.status !== showStatus) return false
+    return true
+  })
+
   const pendingPayouts  = payouts.filter(p => !p.approved_by_artist)
   const pendingBatches  = batches.filter(b => b.status === "Pending Sign-Off")
 
@@ -241,6 +253,18 @@ export default function ArtistPage() {
               <h2 className="font-semibold text-navy">Your Shows — 2026</h2>
               <p className="text-xs text-gray-500 mt-0.5">Full breakdown for your records — contact BNAS to make changes</p>
             </div>
+            <div className="px-6 py-3 border-b flex flex-wrap gap-3 items-end bg-gray-50">
+              <input className="text-sm h-8 px-2 border rounded w-40" placeholder="Search event…" value={showSearch} onChange={e => setShowSearch(e.target.value)} />
+              <input type="date" className="text-sm h-8 px-2 border rounded" value={showFrom} onChange={e => setShowFrom(e.target.value)} />
+              <span className="text-xs text-gray-400">to</span>
+              <input type="date" className="text-sm h-8 px-2 border rounded" value={showTo} onChange={e => setShowTo(e.target.value)} />
+              <select className="text-sm h-8 px-2 border rounded" value={showStatus} onChange={e => setShowStatus(e.target.value)}>
+                <option value="">All statuses</option>
+                <option>Pending</option><option>Fee Received</option><option>All Paid</option><option>Cancelled</option>
+              </select>
+              {(showSearch||showFrom||showTo||showStatus) && <button className="text-xs text-gray-400 hover:text-gray-600" onClick={() => { setShowSearch(""); setShowFrom(""); setShowTo(""); setShowStatus("") }}>Clear</button>}
+              <span className="ml-auto text-xs text-gray-500">{filteredShows.length} show{filteredShows.length !== 1 ? "s" : ""}</span>
+            </div>
             <div className="table-wrap rounded-none rounded-b-xl">
               <table>
                 <thead>
@@ -260,7 +284,7 @@ export default function ArtistPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {shows.map(s => {
+                  {filteredShows.map(s => {
                     const c = calcShow(s)
                     return (
                       <tr key={s.id}>
@@ -292,18 +316,18 @@ export default function ArtistPage() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-lblue font-semibold">
-                    <td colSpan={3}>TOTALS</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.gross, 0))}</td>
+                    <td colSpan={3}>TOTALS ({filteredShows.length})</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.gross, 0))}</td>
                     <td></td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).comm, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.sound, 0))}</td>
-                    {artist.mus1_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus1, 0))}</td>}
-                    {artist.mus2_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus2, 0))}</td>}
-                    {artist.mus3_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.mus3, 0))}</td>}
-                    {artist.mus4_name && <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + (r.mus4||0), 0))}</td>}
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + r.other_costs, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).warchest, 0))}</td>
-                    <td className="text-right font-mono">{ZAR(shows.reduce((s, r) => s + calcShow(r).nett, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + calcShow(r).comm, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.sound, 0))}</td>
+                    {artist.mus1_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.mus1, 0))}</td>}
+                    {artist.mus2_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.mus2, 0))}</td>}
+                    {artist.mus3_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.mus3, 0))}</td>}
+                    {artist.mus4_name && <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + (r.mus4||0), 0))}</td>}
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + r.other_costs, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + calcShow(r).warchest, 0))}</td>
+                    <td className="text-right font-mono">{ZAR(filteredShows.reduce((s, r) => s + calcShow(r).nett, 0))}</td>
                     <td></td>
                   </tr>
                 </tfoot>

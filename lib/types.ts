@@ -58,6 +58,7 @@ export interface Show {
   dep_pct: number | null
   dep_is_pre: boolean
   notes: string | null
+  invoiced_client: string | null
 }
 
 export interface Transfer {

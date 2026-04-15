@@ -24,7 +24,7 @@ const BLANK_SHOW = {
   pay_type: "Escrow", comm_pct: "0.20", sound: "0", mus1: "0", mus2: "0",
   mus3: "0", mus4: "0", other_costs: "0", warchest_pct: "0.20",
   batch_num: "", status: "Pending", dep_pct: "0", dep_is_pre: false, notes: "",
-  responsible_agent: "", secondary_agent: "",
+  responsible_agent: "", secondary_agent: "", invoiced_client: "",
 }
 
 export default function ArtistDetailPage() {
@@ -121,7 +121,7 @@ export default function ArtistDetailPage() {
       batch_num: s.batch_num || "", status: s.status || "Pending",
       dep_pct: String(s.dep_pct ?? 0), dep_is_pre: s.dep_is_pre || false,
       notes: s.notes || "",
-      responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "",
+      responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "", invoiced_client: s.invoiced_client || "",
     })
     setShowForm(true)
   }
@@ -154,6 +154,7 @@ export default function ArtistDetailPage() {
       batch_num: newShow.batch_num || null,
       status: newShow.status,
       notes: newShow.notes,
+      invoiced_client: newShow.invoiced_client || null,
       responsible_agent: newShow.responsible_agent || null,
       secondary_agent: newShow.secondary_agent || null,
     }
@@ -588,6 +589,7 @@ export default function ArtistDetailPage() {
                   </div>
                   <div><label>Responsible Agent</label><select value={newShow.responsible_agent} onChange={e => setNewShow(s => ({ ...s, responsible_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
                   <div><label>Secondary Agent</label><select value={newShow.secondary_agent} onChange={e => setNewShow(s => ({ ...s, secondary_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
+                  <div><label>Invoiced Client</label><input value={newShow.invoiced_client} onChange={e => setNewShow(s => ({ ...s, invoiced_client: e.target.value }))} placeholder="Who is paying?" /></div>
                   <div className="col-span-2"><label>Notes</label><input value={newShow.notes} onChange={e => setNewShow(s => ({ ...s, notes: e.target.value }))} /></div>
                   <div className="col-span-4 flex gap-2">
                     <button onClick={saveShow} disabled={saving} className="btn-primary">{saving ? "Saving…" : editingShowId ? "Save Changes" : "Save Show"}</button>

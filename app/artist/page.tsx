@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar"
 import type { Artist, Show, Transfer, Payout, Batch } from "@/lib/types"
 import { ZAR, calcShow, escrowBalance, nettOwed, warchestPot } from "@/lib/calculations"
 
-type Tab = "summary" | "shows" | "payouts" | "approvals"
+type Tab = "summary" | "shows" | "payouts" | "approvals" | "loans"
 
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—"
@@ -22,6 +22,7 @@ export default function ArtistPage() {
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [payouts, setPayouts]     = useState<Payout[]>([])
   const [batches, setBatches]     = useState<Batch[]>([])
+  const [loans, setLoans]           = useState<LoanRepayment[]>([])
   const [loading, setLoading]     = useState(true)
   const [approving, setApproving] = useState<string | null>(null)
   const [signingOff, setSigningOff] = useState<string | null>(null)
@@ -45,14 +46,15 @@ export default function ArtistPage() {
       if (!profile?.artist_id) { setLoading(false); return }
 
       const aid = profile.artist_id
-      const [{ data: a }, { data: s }, { data: t }, { data: p }, { data: b }] = await Promise.all([
+      const [{ data: a }, { data: s }, { data: t }, { data: p }, { data: b }, { data: l }] = await Promise.all([
         supabase.from("artists").select("*").eq("id", aid).single(),
         supabase.from("shows").select("*").eq("artist_id", aid).order("show_date"),
         supabase.from("transfers").select("*").eq("artist_id", aid).order("transfer_date"),
         supabase.from("payouts").select("*").eq("artist_id", aid).order("payout_date"),
         supabase.from("batches").select("*").eq("artist_id", aid).order("created_at", { ascending: false }),
+        supabase.from("loan_repayments").select("*").eq("artist_id", aid).order("repayment_date"),
       ])
-      setArtist(a); setShows(s || []); setTransfers(t || []); setPayouts(p || []); setBatches(b || [])
+      setArtist(a); setShows(s || []); setTransfers(t || []); setPayouts(p || []); setBatches(b || []); setLoans(l || [])
       setLoading(false)
     }
     load()
@@ -172,7 +174,7 @@ export default function ArtistPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-          {(["summary","shows","payouts","approvals"] as Tab[]).map(t => (
+          {([...["summary","shows","payouts","approvals"], ...(loans.length > 0 ? ["loans"] : [])] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
                 tab === t ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-gray-700"

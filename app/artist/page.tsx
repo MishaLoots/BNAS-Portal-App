@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
 import type { Artist, Show, Transfer, Payout, Batch } from "@/lib/types"
-import { ZAR, calcShow, escrowBalance, nettOwed } from "@/lib/calculations"
+import { ZAR, calcShow, escrowBalance, nettOwed, warchestPot } from "@/lib/calculations"
 
 type Tab = "summary" | "shows" | "payouts" | "approvals"
 
@@ -133,7 +133,8 @@ export default function ArtistPage() {
     </div>
   )
 
-  const eb   = escrowBalance(artist, shows, transfers)
+  const eb    = escrowBalance(artist, shows, transfers)
+  const wcPot = warchestPot(shows)
   const paid = payouts.reduce((s, p) => s + p.amount, 0)
   const owed = nettOwed(shows)
   const due  = owed - paid
@@ -219,10 +220,22 @@ export default function ArtistPage() {
                   <span className="text-gray-500">− Transfers to running account</span>
                   <span className="font-mono text-red-600">({ZAR(eb.totalOut)})</span>
                 </div>
-                <div className="flex justify-between py-2 font-bold text-base">
+                <div className="flex justify-between py-2 font-bold text-base border-b">
                   <span>Current escrow balance</span>
                   <span className={`font-mono ${eb.current < 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(eb.current)}</span>
                 </div>
+                {wcPot > 0 && (
+                  <div className="flex justify-between py-1.5 border-b text-purple-700">
+                    <span className="text-sm">↳ Warchest (locked in escrow)</span>
+                    <span className="font-mono text-sm">({ZAR(wcPot)})</span>
+                  </div>
+                )}
+                {wcPot > 0 && (
+                  <div className="flex justify-between py-1.5 font-semibold text-sm">
+                    <span>Available escrow (excl. warchest)</span>
+                    <span className={`font-mono ${(eb.current - wcPot) < 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(eb.current - wcPot)}</span>
+                  </div>
+                )}
               </div>
             </div>
 

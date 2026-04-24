@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
-import type { Artist, Show, Transfer, Payout, Batch } from "@/lib/types"
+import type { Artist, Batch, LoanRepayment, Payout, Show, Transfer } from "@/lib/types"
 import { ZAR, calcShow, escrowBalance, nettOwed, warchestPot } from "@/lib/calculations"
 
 type Tab = "summary" | "shows" | "payouts" | "approvals" | "loans"

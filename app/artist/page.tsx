@@ -174,7 +174,7 @@ export default function ArtistPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-          {([...["summary","shows","payouts","approvals"], ...(loans.length > 0 ? ["loans"] : [])] as Tab[]).map(t => (
+          {([...["summary","shows","payouts","approvals"], ...(artist.loan_opening > 0 ? ["loans"] : [])] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
                 tab === t ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -486,6 +486,80 @@ export default function ArtistPage() {
             ))}
           </div>
         )}
+
+        {/* ── LOANS ─────────────────────────────────────────────── */}
+        {tab === "loans" && artist.loan_opening > 0 && (() => {
+          const loanRepaid      = loans.filter(l => !l.type || l.type === "Repayment").reduce((s, l) => s + l.amount, 0)
+          const loanOutstanding = artist.loan_opening - loanRepaid
+          return (
+            <div className="space-y-4">
+              <div className="card">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-semibold text-navy">Loan Account</h3>
+                    <p className="text-sm text-gray-500 mt-1">Tracking loan owed to BNAS</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500">Outstanding</div>
+                    <div className="text-2xl font-bold text-red-600">{ZAR(loanOutstanding)}</div>
+                  </div>
+                </div>
+                <div className="space-y-2 text-sm border-t pt-3">
+                  <div className="flex justify-between py-1.5 border-b">
+                    <span className="text-gray-500">Opening Loan Balance</span>
+                    <span className="font-mono">{ZAR(artist.loan_opening)}</span>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b">
+                    <span className="text-gray-500">Total Repaid</span>
+                    <span className="font-mono text-green-700">{ZAR(loanRepaid)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 font-bold text-base">
+                    <span>Outstanding Balance</span>
+                    <span className={`font-mono ${loanOutstanding > 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(loanOutstanding)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {loans.length > 0 && (
+                <div className="card p-0">
+                  <div className="px-6 py-4 border-b">
+                    <h3 className="font-semibold text-navy">Transaction History</h3>
+                  </div>
+                  <div className="table-wrap rounded-none rounded-b-xl">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Description</th>
+                          <th>Type</th>
+                          <th className="text-right">Amount</th>
+                          <th>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loans.map(l => (
+                          <tr key={l.id}>
+                            <td className="whitespace-nowrap">{fmtDate(l.repayment_date)}</td>
+                            <td>{l.description}</td>
+                            <td>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                l.type === "Advance" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                              }`}>{l.type || "Repayment"}</span>
+                            </td>
+                            <td className={`text-right font-mono ${l.type === "Advance" ? "text-red-600" : "text-green-700"}`}>
+                              {l.type === "Advance" ? `(${ZAR(l.amount)})` : ZAR(l.amount)}
+                            </td>
+                            <td className="text-gray-500">{l.notes}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </main>
     </div>
   )

@@ -25,6 +25,7 @@ export function pendingAmount(s: Show): number {
   if (s.pay_type !== "Escrow") return 0
   if (s.dep_is_pre) return 0
   if (s.dep_pct === null || s.dep_pct === undefined) return 0
+  if (s.status === "All Paid" || s.status === "Fee Received" || s.status === "Cancelled") return 0
   return s.gross * (1 - s.dep_pct / 100)
 }
 

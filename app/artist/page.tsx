@@ -174,7 +174,7 @@ export default function ArtistPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-          {([...["summary","shows","payouts","approvals"], ...(artist.loan_opening > 0 ? ["loans"] : [])] as Tab[]).map(t => (
+          {([...["summary","shows","payouts","approvals"], ...(artist.loan_opening != null ? ["loans"] : [])] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-1.5 rounded-md text-sm font-medium capitalize transition-colors ${
                 tab === t ? "bg-white text-navy shadow-sm" : "text-gray-500 hover:text-gray-700"
@@ -488,7 +488,7 @@ export default function ArtistPage() {
         )}
 
         {/* ── LOANS ─────────────────────────────────────────────── */}
-        {tab === "loans" && artist.loan_opening > 0 && (() => {
+        {tab === "loans" && artist.loan_opening != null && (() => {
           const loanRepaid      = loans.filter(l => !l.type || l.type === "Repayment").reduce((s, l) => s + l.amount, 0)
           const loanOutstanding = artist.loan_opening - loanRepaid
           return (

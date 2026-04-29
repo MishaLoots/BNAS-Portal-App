@@ -483,7 +483,7 @@ export default function ArtistDetailPage() {
     { key: "shows",  label: "Show Log" },
     { key: "escrow", label: "Escrow Tracker" },
     { key: "payouts",label: "Payouts" },
-    ...(artist.loan_opening > 0 ? [{ key: "loan" as Tab, label: "Loan Account" }] : []),
+    ...(artist.loan_opening != null ? [{ key: "loan" as Tab, label: "Loan Account" }] : []),
     { key: "batch",  label: "Batch Calc" },
   ]
 
@@ -529,7 +529,7 @@ export default function ArtistDetailPage() {
             <div className="stat-label">Balance Due Artist</div>
             <div className={`stat-value text-xl ${due < 0 ? "text-red-600" : ""}`}>{ZAR(due)}</div>
           </div>
-          {artist.loan_opening > 0 && (
+          {artist.loan_opening != null && (
             <div className="stat-card border-red-200">
               <div className="stat-label">Loan Outstanding</div>
               <div className="stat-value text-xl text-red-600">{ZAR(loanOutstanding)}</div>
@@ -916,7 +916,7 @@ export default function ArtistDetailPage() {
         )}
 
         {/* ── LOAN ACCOUNT ─────────────────────────────────────── */}
-        {tab === "loan" && artist.loan_opening > 0 && (
+        {tab === "loan" && artist.loan_opening != null && (
           <div className="card max-w-2xl space-y-4">
             <div className="flex justify-between items-start">
               <div>

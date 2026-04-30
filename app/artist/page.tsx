@@ -226,18 +226,6 @@ export default function ArtistPage() {
                   <span>Current escrow balance</span>
                   <span className={`font-mono ${eb.current < 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(eb.current)}</span>
                 </div>
-                {wcPot > 0 && eb.current > 0 && (
-                  <div className="flex justify-between py-1.5 border-b text-purple-700">
-                    <span className="text-sm">↳ Warchest (retained in escrow)</span>
-                    <span className="font-mono text-sm">({ZAR(Math.min(wcPot, eb.current))})</span>
-                  </div>
-                )}
-                {wcPot > 0 && eb.current > 0 && (
-                  <div className="flex justify-between py-1.5 font-semibold text-sm">
-                    <span>Available escrow (excl. warchest)</span>
-                    <span className={`font-mono ${Math.max(0, eb.current - wcPot) === 0 ? "text-red-600" : "text-green-700"}`}>{ZAR(Math.max(0, eb.current - wcPot))}</span>
-                  </div>
-                )}
               </div>
             </div>
 

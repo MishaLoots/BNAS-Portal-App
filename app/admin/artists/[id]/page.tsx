@@ -425,10 +425,12 @@ export default function ArtistDetailPage() {
       amount: payoutAmt, notes: `Batch ${note} advance`,
       approved_by_artist: true, approved_at: batch.signed_off_at || new Date().toISOString(),
     })
+    // Full escrow transfer = gross minus warchest (covers nett + comm + band + other)
+    const xferAmt = isPartial ? payoutAmt : Math.round((batch.total_gross - batch.total_warchest) * 100) / 100
     await supabase.from("transfers").insert({
       artist_id: id, transfer_date: today,
-      description: `Batch ${note} artist payout (excl. warchest)`,
-      transfer_type: "Batch Payout", amount: payoutAmt,
+      description: `Batch ${note} payout (excl. warchest)`,
+      transfer_type: "Batch Payout", amount: xferAmt,
     })
     await load()
   }
@@ -449,10 +451,13 @@ export default function ArtistDetailPage() {
       amount: remaining, notes: `Batch ${batch.batch_num} balance paid`,
       approved_by_artist: true, approved_at: new Date().toISOString(),
     })
+    // Full remaining escrow transfer = total gross excl. warchest minus already advanced
+    const alreadyAdvanced = transfers.filter(t => t.description?.includes(batch.batch_num)).reduce((s, t) => s + t.amount, 0)
+    const xferRemaining = Math.round((batch.total_gross - batch.total_warchest - alreadyAdvanced) * 100) / 100
     await supabase.from("transfers").insert({
       artist_id: id, transfer_date: today,
       description: `Batch ${batch.batch_num} balance payout (excl. warchest)`,
-      transfer_type: "Batch Payout", amount: remaining,
+      transfer_type: "Batch Payout", amount: Math.max(0, xferRemaining),
     })
     await load()
   }

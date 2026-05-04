@@ -24,7 +24,7 @@ const BLANK_SHOW = {
   pay_type: "Escrow", comm_pct: "0.20", sound: "0", mus1: "0", mus2: "0",
   mus3: "0", mus4: "0", other_costs: "0", warchest_pct: "0.20",
   batch_num: "", status: "Pending", dep_pct: "0", dep_is_pre: false, notes: "",
-  responsible_agent: "", secondary_agent: "", invoiced_client: "",
+  responsible_agent: "", secondary_agent: "", invoiced_client: "", advance: "0",
 }
 
 export default function ArtistDetailPage() {
@@ -125,7 +125,7 @@ export default function ArtistDetailPage() {
       batch_num: s.batch_num || "", status: s.status || "Pending",
       dep_pct: String(s.dep_pct ?? 0), dep_is_pre: s.dep_is_pre || false,
       notes: s.notes || "",
-      responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "", invoiced_client: s.invoiced_client || "",
+      responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "", invoiced_client: s.invoiced_client || "", advance: String(s.advance || 0),
     })
     setShowForm(true)
   }
@@ -161,6 +161,7 @@ export default function ArtistDetailPage() {
       invoiced_client: newShow.invoiced_client || null,
       responsible_agent: newShow.responsible_agent || null,
       secondary_agent: newShow.secondary_agent || null,
+      advance: parseFloat(newShow.advance) || 0,
     }
     if (editingShowId) {
       await supabase.from("shows").update(payload).eq("id", editingShowId)
@@ -505,9 +506,9 @@ export default function ArtistDetailPage() {
   const batchTotals = batchSel.reduce(
     (acc, s) => {
       const c = calcShow(s)
-      return { gross: acc.gross + s.gross, comm: acc.comm + c.comm, band: acc.band + c.totalBand, wc: acc.wc + c.warchest, nett: acc.nett + c.nett }
+      return { gross: acc.gross + s.gross, comm: acc.comm + c.comm, band: acc.band + c.totalBand, wc: acc.wc + c.warchest, advance: acc.advance + c.advance, nett: acc.nett + c.nett }
     },
-    { gross: 0, comm: 0, band: 0, wc: 0, nett: 0 }
+    { gross: 0, comm: 0, band: 0, wc: 0, advance: 0, nett: 0 }
   )
 
   return (
@@ -606,6 +607,7 @@ export default function ArtistDetailPage() {
                   <div><label>Responsible Agent</label><select value={newShow.responsible_agent} onChange={e => setNewShow(s => ({ ...s, responsible_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
                   <div><label>Secondary Agent</label><select value={newShow.secondary_agent} onChange={e => setNewShow(s => ({ ...s, secondary_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
                   <div><label>Invoiced Client</label><input value={newShow.invoiced_client} onChange={e => setNewShow(s => ({ ...s, invoiced_client: e.target.value }))} placeholder="Who is paying?" /></div>
+                  <div><label>Pre-Show Advance (R)</label><input type="number" value={newShow.advance} onChange={e => setNewShow(s => ({ ...s, advance: e.target.value }))} placeholder="0" /></div>
                   <div className="col-span-2"><label>Notes</label><input value={newShow.notes} onChange={e => setNewShow(s => ({ ...s, notes: e.target.value }))} /></div>
                   <div className="col-span-4 flex gap-2">
                     <button onClick={saveShow} disabled={saving} className="btn-primary">{saving ? "Saving…" : editingShowId ? "Save Changes" : "Save Show"}</button>
@@ -1093,6 +1095,12 @@ export default function ArtistDetailPage() {
                     <div className="text-xs text-gray-500 mb-1">Warchest</div>
                     <div className="font-mono font-semibold text-sm text-red-600">({ZAR(batchTotals.wc)})</div>
                   </div>
+                  {batchTotals.advance > 0 && (
+                    <div className="text-center">
+                      <div className="text-xs text-gray-500 mb-1">Pre-Show Advances</div>
+                      <div className="font-mono font-semibold text-sm text-orange-600">({ZAR(batchTotals.advance)})</div>
+                    </div>
+                  )}
                   <div className="text-center border-l pl-3">
                     <div className="text-xs text-gray-500 mb-1">Nett to Artist</div>
                     <div className="font-mono font-bold text-base text-green-700">{ZAR(batchTotals.nett)}</div>
@@ -1137,6 +1145,7 @@ export default function ArtistDetailPage() {
                       {artist.mus4_name && <th className="text-right">{artist.mus4_name}</th>}
                       <th className="text-right">Other</th>
                       <th className="text-right">WC</th>
+                      <th className="text-right">Advance</th>
                       <th className="text-right">Nett</th>
                       <th>Status</th>
                     </tr>
@@ -1169,6 +1178,7 @@ export default function ArtistDetailPage() {
                           {artist.mus4_name && <td className="text-right font-mono text-gray-600">{s.mus4 ? ZAR(s.mus4) : "—"}</td>}
                           <td className="text-right font-mono text-gray-600">{s.other_costs ? ZAR(s.other_costs) : "—"}</td>
                           <td className="text-right font-mono text-gray-600">{ZAR(c.warchest)}</td>
+                          <td className="text-right font-mono text-orange-600">{s.advance ? ZAR(s.advance) : "—"}</td>
                           <td className="text-right font-mono font-semibold">{ZAR(c.nett)}</td>
                           <td>
                             <span className={`text-xs px-2 py-0.5 rounded-full ${

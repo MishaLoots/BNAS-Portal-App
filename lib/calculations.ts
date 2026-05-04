@@ -8,8 +8,9 @@ export function calcShow(s: Show) {
   const totalBand = s.sound + s.mus1 + s.mus2 + s.mus3 + (s.mus4 || 0) + s.other_costs
   const subtotal  = s.gross - comm - totalBand
   const warchest  = s.pay_type === "Escrow" ? subtotal * s.warchest_pct : 0
-  const nett      = subtotal - warchest
-  return { comm, totalBand, subtotal, warchest, nett }
+  const advance   = s.advance || 0
+  const nett      = subtotal - warchest - advance
+  return { comm, totalBand, subtotal, warchest, advance, nett }
 }
 
 /** Amount that counts as received into escrow from this show */

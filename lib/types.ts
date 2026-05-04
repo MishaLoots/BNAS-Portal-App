@@ -60,6 +60,7 @@ export interface Show {
   notes: string | null
   invoiced_client: string | null
   agent_batch_ref: string | null
+  advance: number
 }
 
 export interface Transfer {

@@ -31,6 +31,10 @@ export default function AgentPage() {
   const [dateTo, setDateTo]     = useState("")
   const [statusF, setStatusF]   = useState("")
   const [artistF, setArtistF]   = useState("")
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
+  function toggleMonth(m: string) {
+    setCollapsedMonths(prev => { const n = new Set(prev); n.has(m) ? n.delete(m) : n.add(m); return n })
+  }
 
   useEffect(() => {
     async function load() {
@@ -227,30 +231,55 @@ export default function AgentPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map(r => {
-                    const comm    = r.gross * r.comm_pct
-                    const toSplit = comm * (1 - (r.artist.bnas_overhead_pct || 0.2))
-                    return (
-                      <tr key={r.id}>
-                        <td className="text-gray-500 whitespace-nowrap">{fmtDate(r.show_date)}</td>
-                        <td className="text-gray-600 text-sm">{r.artist.name}</td>
-                        <td className="font-medium">{r.event}</td>
-                        <td className="text-gray-500">{r.show_type}</td>
-                        <td className="text-right font-mono">{ZAR(r.gross)}</td>
-                        <td className="text-right font-mono text-gray-600">{ZAR(comm)}</td>
-                        <td className="text-right font-mono text-gray-600">{ZAR(toSplit)}</td>
-                        <td className="text-right font-mono font-semibold">{ZAR(r.agentEarned)}</td>
-                        <td>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            r.status === "All Paid" ? "bg-green-100 text-green-700" :
-                            r.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
-                            r.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
-                            "bg-gray-100 text-gray-500"
-                          }`}>{r.status || "—"}</span>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {(() => {
+                    const byMonth: Record<string, typeof filteredRows> = {}
+                    filteredRows.forEach(r => {
+                      const mk = r.show_date.slice(0, 7)
+                      if (!byMonth[mk]) byMonth[mk] = []
+                      byMonth[mk].push(r)
+                    })
+                    return Object.keys(byMonth).sort().reverse().flatMap(month => {
+                      const mRows = byMonth[month]
+                      const collapsed = collapsedMonths.has(month)
+                      const label = new Date(month + "-02").toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+                      const mGross = mRows.reduce((s, r) => s + r.gross, 0)
+                      const mCut   = mRows.reduce((s, r) => s + r.agentEarned, 0)
+                      return [
+                        <tr key={`m-${month}`} className="bg-gray-100 hover:bg-gray-200 cursor-pointer select-none" onClick={() => toggleMonth(month)}>
+                          <td colSpan={9}>
+                            <div className="flex items-center justify-between px-1 py-0.5">
+                              <span className="font-semibold text-sm">{collapsed ? "▶" : "▼"} {label} <span className="text-gray-500 font-normal text-xs">({mRows.length} show{mRows.length !== 1 ? "s" : ""})</span></span>
+                              <span className="font-mono text-xs text-gray-600">Gross {ZAR(mGross)} · Your cut {ZAR(mCut)}</span>
+                            </div>
+                          </td>
+                        </tr>,
+                        ...(!collapsed ? mRows.map(r => {
+                          const comm    = r.gross * r.comm_pct
+                          const toSplit = comm * (1 - (r.artist.bnas_overhead_pct || 0.2))
+                          return (
+                            <tr key={r.id}>
+                              <td className="text-gray-500 whitespace-nowrap">{fmtDate(r.show_date)}</td>
+                              <td className="text-gray-600 text-sm">{r.artist.name}</td>
+                              <td className="font-medium">{r.event}</td>
+                              <td className="text-gray-500">{r.show_type}</td>
+                              <td className="text-right font-mono">{ZAR(r.gross)}</td>
+                              <td className="text-right font-mono text-gray-600">{ZAR(comm)}</td>
+                              <td className="text-right font-mono text-gray-600">{ZAR(toSplit)}</td>
+                              <td className="text-right font-mono font-semibold">{ZAR(r.agentEarned)}</td>
+                              <td>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  r.status === "All Paid" ? "bg-green-100 text-green-700" :
+                                  r.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
+                                  r.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
+                                  "bg-gray-100 text-gray-500"
+                                }`}>{r.status || "—"}</span>
+                              </td>
+                            </tr>
+                          )
+                        }) : [])
+                      ]
+                    })
+                  })()}
                 </tbody>
                 <tfoot>
                   <tr className="bg-lblue font-semibold">

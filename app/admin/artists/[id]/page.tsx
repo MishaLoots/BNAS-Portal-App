@@ -81,6 +81,12 @@ export default function ArtistDetailPage() {
   const [editingLoanId, setEditingLoanId] = useState<string | null>(null)
   const [loanEdits, setLoanEdits]         = useState<{ repayment_date: string; description: string; amount: string; notes: string }>({ repayment_date: "", description: "", amount: "", notes: "" })
 
+  // Show log month collapse
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set())
+  function toggleMonth(m: string) {
+    setCollapsedMonths(prev => { const n = new Set(prev); n.has(m) ? n.delete(m) : n.add(m); return n })
+  }
+
   // Show log filters
   const [filterEvent, setFilterEvent]   = useState("")
   const [filterAgent, setFilterAgent]   = useState("")
@@ -636,52 +642,73 @@ export default function ArtistDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredShows.map(s => {
-                    const c = calcShow(s)
-                    return (
-                      <tr key={s.id} className={editingShowId === s.id ? "bg-blue-50" : ""}>
-                        <td className="text-gray-500 whitespace-nowrap">{fmtDate(s.show_date)}</td>
-                        <td>{s.event}</td>
-                        <td className="text-gray-500">{s.show_type}</td>
-                        <td className="text-right font-mono">{ZAR(s.gross)}</td>
-                        <td className={`text-xs font-medium ${s.pay_type === "Escrow" ? "text-bblue" : "text-gray-500"}`}>{s.pay_type}</td>
-                        <td className="text-right font-mono text-gray-600">{ZAR(c.comm)}</td>
-                        <td className="text-right font-mono text-gray-600">{s.sound ? ZAR(s.sound) : "—"}</td>
-                        {artist.mus1_name && <td className="text-right font-mono text-gray-600">{s.mus1 ? ZAR(s.mus1) : "—"}</td>}
-                        {artist.mus2_name && <td className="text-right font-mono text-gray-600">{s.mus2 ? ZAR(s.mus2) : "—"}</td>}
-                        {artist.mus3_name && <td className="text-right font-mono text-gray-600">{s.mus3 ? ZAR(s.mus3) : "—"}</td>}
-                        {artist.mus4_name && <td className="text-right font-mono text-gray-600">{s.mus4 ? ZAR(s.mus4) : "—"}</td>}
-                        <td className="text-right font-mono text-gray-600">{s.other_costs ? ZAR(s.other_costs) : "—"}</td>
-                        <td className="text-right font-mono text-gray-600">{ZAR(c.warchest)}</td>
-                        <td className="text-right font-mono font-semibold">{ZAR(c.nett)}</td>
-                        <td className="text-gray-500 text-xs">{s.responsible_agent}{s.secondary_agent ? ` / ${s.secondary_agent}` : ""}</td>
-                        <td className="text-gray-500">{s.batch_num}</td>
-                        <td>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            s.status === "All Paid" ? "bg-green-100 text-green-700" :
-                            s.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
-                            s.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
-                            "bg-gray-100 text-gray-500"
-                          }`}>{s.status || "—"}</span>
-                        </td>
-                        <td className="text-center">
-                          {s.dep_is_pre ? <span className="text-xs text-purple-600">Pre</span>
-                            : s.dep_pct !== null ? `${s.dep_pct}%`
-                            : "—"}
-                        </td>
-                        <td className="whitespace-nowrap">
-                          <button
-                            onClick={() => startEditShow(s)}
-                            className="text-xs text-bblue hover:text-navy mr-2"
-                          >Edit</button>
-                          <button
-                            onClick={() => deleteShow(s.id, s.event)}
-                            className="text-xs text-red-500 hover:text-red-700"
-                          >Del</button>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {(() => {
+                    const musCount = [artist.mus1_name, artist.mus2_name, artist.mus3_name, artist.mus4_name].filter(Boolean).length
+                    const totalCols = 15 + musCount
+                    const byMonth: Record<string, typeof filteredShows> = {}
+                    filteredShows.forEach(s => {
+                      const mk = s.show_date.slice(0, 7)
+                      if (!byMonth[mk]) byMonth[mk] = []
+                      byMonth[mk].push(s)
+                    })
+                    return Object.keys(byMonth).sort().reverse().flatMap(month => {
+                      const mShows = byMonth[month]
+                      const collapsed = collapsedMonths.has(month)
+                      const label = new Date(month + "-02").toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+                      const mGross = mShows.reduce((s, r) => s + r.gross, 0)
+                      const mNett  = mShows.reduce((s, r) => s + calcShow(r).nett, 0)
+                      return [
+                        <tr key={`m-${month}`} className="bg-gray-100 hover:bg-gray-200 cursor-pointer select-none" onClick={() => toggleMonth(month)}>
+                          <td colSpan={totalCols}>
+                            <div className="flex items-center justify-between px-1 py-0.5">
+                              <span className="font-semibold text-sm">{collapsed ? "▶" : "▼"} {label} <span className="text-gray-500 font-normal text-xs">({mShows.length} show{mShows.length !== 1 ? "s" : ""})</span></span>
+                              <span className="font-mono text-xs text-gray-600">Gross {ZAR(mGross)} · Nett {ZAR(mNett)}</span>
+                            </div>
+                          </td>
+                        </tr>,
+                        ...(!collapsed ? mShows.map(s => {
+                          const c = calcShow(s)
+                          return (
+                            <tr key={s.id} className={editingShowId === s.id ? "bg-blue-50" : ""}>
+                              <td className="text-gray-500 whitespace-nowrap">{fmtDate(s.show_date)}</td>
+                              <td>{s.event}</td>
+                              <td className="text-gray-500">{s.show_type}</td>
+                              <td className="text-right font-mono">{ZAR(s.gross)}</td>
+                              <td className={`text-xs font-medium ${s.pay_type === "Escrow" ? "text-bblue" : "text-gray-500"}`}>{s.pay_type}</td>
+                              <td className="text-right font-mono text-gray-600">{ZAR(c.comm)}</td>
+                              <td className="text-right font-mono text-gray-600">{s.sound ? ZAR(s.sound) : "—"}</td>
+                              {artist.mus1_name && <td className="text-right font-mono text-gray-600">{s.mus1 ? ZAR(s.mus1) : "—"}</td>}
+                              {artist.mus2_name && <td className="text-right font-mono text-gray-600">{s.mus2 ? ZAR(s.mus2) : "—"}</td>}
+                              {artist.mus3_name && <td className="text-right font-mono text-gray-600">{s.mus3 ? ZAR(s.mus3) : "—"}</td>}
+                              {artist.mus4_name && <td className="text-right font-mono text-gray-600">{s.mus4 ? ZAR(s.mus4) : "—"}</td>}
+                              <td className="text-right font-mono text-gray-600">{s.other_costs ? ZAR(s.other_costs) : "—"}</td>
+                              <td className="text-right font-mono text-gray-600">{ZAR(c.warchest)}</td>
+                              <td className="text-right font-mono font-semibold">{ZAR(c.nett)}</td>
+                              <td className="text-gray-500 text-xs">{s.responsible_agent}{s.secondary_agent ? ` / ${s.secondary_agent}` : ""}</td>
+                              <td className="text-gray-500">{s.batch_num}</td>
+                              <td>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  s.status === "All Paid" ? "bg-green-100 text-green-700" :
+                                  s.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
+                                  s.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
+                                  "bg-gray-100 text-gray-500"
+                                }`}>{s.status || "—"}</span>
+                              </td>
+                              <td className="text-center">
+                                {s.dep_is_pre ? <span className="text-xs text-purple-600">Pre</span>
+                                  : s.dep_pct !== null ? `${s.dep_pct}%`
+                                  : "—"}
+                              </td>
+                              <td className="whitespace-nowrap">
+                                <button onClick={() => startEditShow(s)} className="text-xs text-bblue hover:text-navy mr-2">Edit</button>
+                                <button onClick={() => deleteShow(s.id, s.event)} className="text-xs text-red-500 hover:text-red-700">Del</button>
+                              </td>
+                            </tr>
+                          )
+                        }) : [])
+                      ]
+                    })
+                  })()}
                 </tbody>
                 <tfoot>
                   <tr className="bg-lblue font-semibold">

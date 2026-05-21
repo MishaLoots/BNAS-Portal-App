@@ -82,12 +82,14 @@ export function calcAgentEarned(s: Show, artist: Artist, agentName: string): num
     const isAgent = (s.responsible_agent || "").toLowerCase() === "007" || (s.secondary_agent || "").toLowerCase() === "007"
     return isAgent ? s.gross * s.comm_pct : 0
   }
-  // Andrei — earns a fixed % of gross (not of the split pool)
+  // Andrei — earns a fixed % of gross, but only when he's the responsible agent
   if (name === "andrei") {
-    return s.gross * (artist.andrei_split_pct || 0)
+    const isAgent = (s.responsible_agent || "").toLowerCase() === "andrei"
+    return isAgent ? s.gross * (artist.andrei_split_pct || 0) : 0
   }
-  // Commission remaining after Andrei's flat take
-  const andreiTake = s.gross * (artist.andrei_split_pct || 0)
+  // Only deduct Andrei's take when he's actually on this show
+  const andreiIsAgent = (s.responsible_agent || "").toLowerCase() === "andrei"
+  const andreiTake = andreiIsAgent ? s.gross * (artist.andrei_split_pct || 0) : 0
   const remainingComm = s.gross * s.comm_pct - andreiTake
   // BNAS Overhead — % of remaining commission
   if (name === "bnas overhead") {

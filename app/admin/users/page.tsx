@@ -92,11 +92,12 @@ export default function UsersPage() {
     )
   }
 
+  // Andrei's % is of gross (not of the split pool), so exclude from total validation
   function splitTotal(a: ArtistSplits) {
-    return ((a.misha_split_pct + a.gareth_split_pct + a.jako_split_pct + a.que_split_pct + a.andrei_split_pct + a.unalloc_split_pct) * 100).toFixed(0)
+    return ((a.misha_split_pct + a.gareth_split_pct + a.jako_split_pct + a.que_split_pct + a.unalloc_split_pct) * 100).toFixed(0)
   }
   function editTotal() {
-    return ((splitEdits.misha_split_pct + splitEdits.gareth_split_pct + splitEdits.jako_split_pct + splitEdits.que_split_pct + splitEdits.andrei_split_pct + splitEdits.unalloc_split_pct) * 100).toFixed(0)
+    return ((splitEdits.misha_split_pct + splitEdits.gareth_split_pct + splitEdits.jako_split_pct + splitEdits.que_split_pct + splitEdits.unalloc_split_pct) * 100).toFixed(0)
   }
 
   useEffect(() => { load() }, [])
@@ -338,7 +339,7 @@ export default function UsersPage() {
         <div className="card p-0">
           <div className="px-6 py-4 border-b border-gray-100">
             <h2 className="font-semibold text-navy">Commission Splits by Artist</h2>
-            <p className="text-xs text-gray-500 mt-1">BNAS% is overhead taken first. Remaining splits must total 100%.</p>
+            <p className="text-xs text-gray-500 mt-1">BNAS% is overhead taken first. Remaining splits must total 100%. Andrei% is of gross (not of pool) — only applies when he is responsible agent.</p>
           </div>
           <div className="table-wrap rounded-none rounded-b-xl">
             <table>

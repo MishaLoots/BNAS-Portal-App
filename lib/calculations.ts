@@ -68,6 +68,7 @@ export function agentSplitPct(agentName: string, artist: Artist): number {
     case "misha":     return artist.misha_split_pct     || 0
     case "jako":      return artist.jako_split_pct      || 0
     case "que":       return artist.que_split_pct       || 0
+    case "andrei":    return artist.andrei_split_pct    || 0
     case "bnas pool": return artist.unalloc_split_pct   || 0
     default:          return 0
   }
@@ -81,12 +82,18 @@ export function calcAgentEarned(s: Show, artist: Artist, agentName: string): num
     const isAgent = (s.responsible_agent || "").toLowerCase() === "007" || (s.secondary_agent || "").toLowerCase() === "007"
     return isAgent ? s.gross * s.comm_pct : 0
   }
-  // BNAS Overhead — earns 20% overhead slice of every show's commission
-  if (name === "bnas overhead") {
-    return s.gross * s.comm_pct * (artist.bnas_overhead_pct || 0.2)
+  // Andrei — earns a fixed % of gross (not of the split pool)
+  if (name === "andrei") {
+    return s.gross * (artist.andrei_split_pct || 0)
   }
-  const comm    = s.gross * s.comm_pct
-  const toSplit = comm * (1 - (artist.bnas_overhead_pct || 0.2))
+  // Commission remaining after Andrei's flat take
+  const andreiTake = s.gross * (artist.andrei_split_pct || 0)
+  const remainingComm = s.gross * s.comm_pct - andreiTake
+  // BNAS Overhead — % of remaining commission
+  if (name === "bnas overhead") {
+    return remainingComm * (artist.bnas_overhead_pct || 0.2)
+  }
+  const toSplit = remainingComm * (1 - (artist.bnas_overhead_pct || 0.2))
   return toSplit * agentSplitPct(agentName, artist)
 }
 

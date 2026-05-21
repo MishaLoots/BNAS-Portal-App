@@ -21,7 +21,7 @@ interface ArtistSplits {
   bnas_overhead_pct: number
   misha_split_pct: number; gareth_split_pct: number
   jako_split_pct: number;  que_split_pct: number
-  unalloc_split_pct: number
+  andrei_split_pct: number; unalloc_split_pct: number
 }
 
 export default function UsersPage() {
@@ -40,7 +40,7 @@ export default function UsersPage() {
 
   // Splits editing
   const [editingSplitId, setEditingSplitId] = useState<string | null>(null)
-  const [splitEdits, setSplitEdits] = useState<Omit<ArtistSplits, "id" | "name">>({ bnas_overhead_pct: 0.2, misha_split_pct: 0, gareth_split_pct: 0, jako_split_pct: 0, que_split_pct: 0, unalloc_split_pct: 0 })
+  const [splitEdits, setSplitEdits] = useState<Omit<ArtistSplits, "id" | "name">>({ bnas_overhead_pct: 0.2, misha_split_pct: 0, gareth_split_pct: 0, jako_split_pct: 0, que_split_pct: 0, andrei_split_pct: 0, unalloc_split_pct: 0 })
   const [splitSaving, setSplitSaving] = useState(false)
 
   // Invite form
@@ -58,7 +58,7 @@ export default function UsersPage() {
 
     const [res, { data: splits }] = await Promise.all([
       fetch("/api/admin/users", { headers: { Authorization: `Bearer ${session.access_token}` } }),
-      supabase.from("artists").select("id,name,bnas_overhead_pct,misha_split_pct,gareth_split_pct,jako_split_pct,que_split_pct,unalloc_split_pct").order("name"),
+      supabase.from("artists").select("id,name,bnas_overhead_pct,misha_split_pct,gareth_split_pct,jako_split_pct,que_split_pct,andrei_split_pct,unalloc_split_pct").order("name"),
     ])
     const json = await res.json()
     setUsers(json.users || [])
@@ -70,7 +70,7 @@ export default function UsersPage() {
 
   function startEditSplit(a: ArtistSplits) {
     setEditingSplitId(a.id)
-    setSplitEdits({ bnas_overhead_pct: a.bnas_overhead_pct, misha_split_pct: a.misha_split_pct, gareth_split_pct: a.gareth_split_pct, jako_split_pct: a.jako_split_pct, que_split_pct: a.que_split_pct, unalloc_split_pct: a.unalloc_split_pct })
+    setSplitEdits({ bnas_overhead_pct: a.bnas_overhead_pct, misha_split_pct: a.misha_split_pct, gareth_split_pct: a.gareth_split_pct, jako_split_pct: a.jako_split_pct, que_split_pct: a.que_split_pct, andrei_split_pct: a.andrei_split_pct, unalloc_split_pct: a.unalloc_split_pct })
   }
 
   async function saveSplitEdit() {
@@ -93,10 +93,10 @@ export default function UsersPage() {
   }
 
   function splitTotal(a: ArtistSplits) {
-    return ((a.misha_split_pct + a.gareth_split_pct + a.jako_split_pct + a.que_split_pct + a.unalloc_split_pct) * 100).toFixed(0)
+    return ((a.misha_split_pct + a.gareth_split_pct + a.jako_split_pct + a.que_split_pct + a.andrei_split_pct + a.unalloc_split_pct) * 100).toFixed(0)
   }
   function editTotal() {
-    return ((splitEdits.misha_split_pct + splitEdits.gareth_split_pct + splitEdits.jako_split_pct + splitEdits.que_split_pct + splitEdits.unalloc_split_pct) * 100).toFixed(0)
+    return ((splitEdits.misha_split_pct + splitEdits.gareth_split_pct + splitEdits.jako_split_pct + splitEdits.que_split_pct + splitEdits.andrei_split_pct + splitEdits.unalloc_split_pct) * 100).toFixed(0)
   }
 
   useEffect(() => { load() }, [])
@@ -350,6 +350,7 @@ export default function UsersPage() {
                   <th className="text-right">Gareth%</th>
                   <th className="text-right">Jako%</th>
                   <th className="text-right">Que%</th>
+                  <th className="text-right">Andrei%</th>
                   <th className="text-right">Unalloc%</th>
                   <th className="text-right">Total%</th>
                   <th></th>
@@ -364,6 +365,7 @@ export default function UsersPage() {
                     <td className="text-right">{pctInput("gareth_split_pct")}</td>
                     <td className="text-right">{pctInput("jako_split_pct")}</td>
                     <td className="text-right">{pctInput("que_split_pct")}</td>
+                    <td className="text-right">{pctInput("andrei_split_pct")}</td>
                     <td className="text-right">{pctInput("unalloc_split_pct")}</td>
                     <td className={`text-right text-xs font-semibold ${editTotal() === "100" ? "text-green-700" : "text-red-600"}`}>
                       {editTotal()}%
@@ -381,6 +383,7 @@ export default function UsersPage() {
                     <td className="text-right text-gray-600">{(a.gareth_split_pct * 100).toFixed(0)}%</td>
                     <td className="text-right text-gray-600">{(a.jako_split_pct * 100).toFixed(0)}%</td>
                     <td className="text-right text-gray-600">{(a.que_split_pct * 100).toFixed(0)}%</td>
+                    <td className="text-right text-gray-600">{(a.andrei_split_pct * 100).toFixed(0)}%</td>
                     <td className="text-right text-gray-600">{(a.unalloc_split_pct * 100).toFixed(0)}%</td>
                     <td className={`text-right text-xs font-semibold ${splitTotal(a) === "100" ? "text-green-700" : "text-red-600"}`}>
                       {splitTotal(a)}%

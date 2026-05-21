@@ -17,6 +17,7 @@ export interface Artist {
   misha_split_pct: number
   jako_split_pct: number
   que_split_pct: number
+  andrei_split_pct: number
   unalloc_split_pct: number
 }
 

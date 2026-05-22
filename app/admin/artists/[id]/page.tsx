@@ -107,7 +107,10 @@ export default function ArtistDetailPage() {
       supabase.from("loan_repayments").select("*").eq("artist_id", id).order("repayment_date"),
       supabase.from("batches").select("*").eq("artist_id", id).order("created_at", { ascending: false }),
     ])
-    setArtist(a); setShows(s || []); setTransfers(t || []); setPayouts(p || []); setLoans(l || []); setBatches(b || [])
+    const loadedShows = s || []
+    setArtist(a); setShows(loadedShows); setTransfers(t || []); setPayouts(p || []); setLoans(l || []); setBatches(b || [])
+    const months = new Set(loadedShows.map((sh: { show_date: string }) => sh.show_date.slice(0, 7)))
+    setCollapsedMonths(months)
     setLoading(false)
   }
 

@@ -13,6 +13,11 @@ const STATUSES    = ["All Paid","Fee Received","Pending","Cancelled"]
 const XFER_TYPES  = ["Batch Payout","Warchest Dist.","Loan/Other","Refund","Other"]
 const AGENTS      = ["","Misha","Gareth","Jako","Que","Andrei","007"]
 
+function dbErr(error: { message?: string } | null, context: string) {
+  if (error) alert(`Error ${context}: ${error.message || "Unknown error"}`)
+  return !!error
+}
+
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "—"
   const d = new Date(s.includes("T") ? s : s + "T00:00:00")
@@ -173,9 +178,11 @@ export default function ArtistDetailPage() {
       advance: parseFloat(newShow.advance) || 0,
     }
     if (editingShowId) {
-      await supabase.from("shows").update(payload).eq("id", editingShowId)
+      const { error } = await supabase.from("shows").update(payload).eq("id", editingShowId)
+      if (dbErr(error, "saving show")) { setSaving(false); return }
     } else {
-      await supabase.from("shows").insert(payload)
+      const { error } = await supabase.from("shows").insert(payload)
+      if (dbErr(error, "adding show")) { setSaving(false); return }
     }
     await load()
     cancelShowForm()
@@ -190,18 +197,20 @@ export default function ArtistDetailPage() {
 
   async function addTransfer() {
     setSaving(true)
-    await supabase.from("transfers").insert({
+    const { error } = await supabase.from("transfers").insert({
       artist_id: id, ...newXfer, amount: parseFloat(newXfer.amount) || 0,
     })
+    if (dbErr(error, "logging transfer")) { setSaving(false); return }
     await load(); setXferForm(false); setSaving(false)
   }
 
   async function addPayout() {
     setSaving(true)
-    await supabase.from("payouts").insert({
+    const { error } = await supabase.from("payouts").insert({
       artist_id: id, ...newPay, amount: parseFloat(newPay.amount) || 0,
       approved_by_artist: false,
     })
+    if (dbErr(error, "logging payout")) { setSaving(false); return }
     await load(); setPayForm(false); setSaving(false)
   }
 
@@ -236,7 +245,8 @@ export default function ArtistDetailPage() {
   async function savePayoutEdit() {
     if (!editingPayoutId) return
     setSaving(true)
-    await supabase.from("payouts").update({ payout_date: payoutEdits.payout_date, batch_ref: payoutEdits.batch_ref, amount: parseFloat(payoutEdits.amount) || 0, notes: payoutEdits.notes }).eq("id", editingPayoutId)
+    const { error } = await supabase.from("payouts").update({ payout_date: payoutEdits.payout_date, batch_ref: payoutEdits.batch_ref, amount: parseFloat(payoutEdits.amount) || 0, notes: payoutEdits.notes }).eq("id", editingPayoutId)
+    if (dbErr(error, "saving payout")) { setSaving(false); return }
     setEditingPayoutId(null)
     await load(); setSaving(false)
   }
@@ -254,7 +264,8 @@ export default function ArtistDetailPage() {
   async function saveXferEdit() {
     if (!editingXferId) return
     setSaving(true)
-    await supabase.from("transfers").update({ transfer_date: xferEdits.transfer_date, description: xferEdits.description, transfer_type: xferEdits.transfer_type, amount: parseFloat(xferEdits.amount) || 0 }).eq("id", editingXferId)
+    const { error } = await supabase.from("transfers").update({ transfer_date: xferEdits.transfer_date, description: xferEdits.description, transfer_type: xferEdits.transfer_type, amount: parseFloat(xferEdits.amount) || 0 }).eq("id", editingXferId)
+    if (dbErr(error, "saving transfer")) { setSaving(false); return }
     setEditingXferId(null)
     await load(); setSaving(false)
   }
@@ -272,7 +283,8 @@ export default function ArtistDetailPage() {
   async function saveLoanEdit() {
     if (!editingLoanId) return
     setSaving(true)
-    await supabase.from("loan_repayments").update({ repayment_date: loanEdits.repayment_date, description: loanEdits.description, amount: parseFloat(loanEdits.amount) || 0, notes: loanEdits.notes }).eq("id", editingLoanId)
+    const { error } = await supabase.from("loan_repayments").update({ repayment_date: loanEdits.repayment_date, description: loanEdits.description, amount: parseFloat(loanEdits.amount) || 0, notes: loanEdits.notes }).eq("id", editingLoanId)
+    if (dbErr(error, "saving loan entry")) { setSaving(false); return }
     setEditingLoanId(null)
     await load(); setSaving(false)
   }
@@ -462,7 +474,7 @@ export default function ArtistDetailPage() {
       approved_by_artist: true, approved_at: new Date().toISOString(),
     })
     // Full remaining escrow transfer = total gross excl. warchest minus already advanced
-    const alreadyAdvanced = transfers.filter(t => t.description?.includes(batch.batch_num)).reduce((s, t) => s + t.amount, 0)
+    const alreadyAdvanced = transfers.filter(t => t.description === `Batch ${batch.batch_num} payout (excl. warchest)`).reduce((s, t) => s + t.amount, 0)
     const xferRemaining = Math.round((batch.total_gross - batch.total_warchest - alreadyAdvanced) * 100) / 100
     await supabase.from("transfers").insert({
       artist_id: id, transfer_date: today,

@@ -97,7 +97,7 @@ export function calcAgentEarned(s: Show, artist: Artist, agentName: string): num
   }
   const toSplit = remainingComm * (1 - (artist.bnas_overhead_pct || 0.2))
   // When Andrei booked: Misha and Gareth split pool 50/50 (= 40% each of remaining comm)
-  if (andreiIsAgent) {
+  if (andreiIsAgent && (artist.andrei_split_pct || 0) > 0) {
     if (name === "misha")  return toSplit * 0.5
     if (name === "gareth") return toSplit * 0.5
     return 0

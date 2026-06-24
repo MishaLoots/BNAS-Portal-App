@@ -487,19 +487,18 @@ export default function AdminPage() {
                         <tr key={`m-${month}`}
                           className="bg-gray-100 hover:bg-gray-200 cursor-pointer select-none"
                           onClick={() => toggleMonth(month)}>
-                          <td colSpan={7}>
-                            <div className="flex items-center justify-between px-1 py-0.5">
-                              <span className="font-semibold text-sm">
-                                {collapsed ? "▶" : "▼"} {fmtMonth(month)}{" "}
-                                <span className="text-gray-500 font-normal text-xs">
-                                  ({mShows.length} show{mShows.length !== 1 ? "s" : ""})
-                                </span>
+                          <td colSpan={3} className="py-2">
+                            <span className="font-semibold text-sm">
+                              {collapsed ? "▶" : "▼"} {fmtMonth(month)}{" "}
+                              <span className="text-gray-500 font-normal text-xs">
+                                ({mShows.length} show{mShows.length !== 1 ? "s" : ""})
                               </span>
-                              <span className="font-mono text-xs text-gray-600">
-                                Gross {ZAR(mGross)} · Comm {ZAR(mComm)} · Nett {ZAR(mNett)}
-                              </span>
-                            </div>
+                            </span>
                           </td>
+                          <td className="text-right font-mono text-sm font-semibold py-2">{ZAR(mGross)}</td>
+                          <td className="text-right font-mono text-sm text-gray-600 py-2">{ZAR(mComm)}</td>
+                          <td className="text-right font-mono text-sm font-semibold py-2">{ZAR(mNett)}</td>
+                          <td></td>
                         </tr>,
                         ...(!collapsed ? mShows.map(sh => {
                           const calc = calcShow(sh)

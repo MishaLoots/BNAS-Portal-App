@@ -59,20 +59,16 @@ export default function AgentPayoutsPage() {
 
   const agent = agents.find(a => a.id === selectedAgent)
 
-  // Shows for this agent — exclude already-batched (agent_batch_ref set)
+  // Shows where this agent earns anything (by calcAgentEarned > 0), excluding Cancelled
   const agentShows: ShowRow[] = !agent ? [] : allShows
-    .filter(s => {
-      const ra = (s.responsible_agent || "").toLowerCase()
-      const sa = (s.secondary_agent  || "").toLowerCase()
-      const nm = agent.name.toLowerCase()
-      return (ra === nm || sa === nm) && s.status !== "Cancelled"
-    })
-    .map(s => {
+    .filter(s => s.status !== "Cancelled")
+    .flatMap(s => {
       const ar = artists.find(a => a.id === s.artist_id)
-      if (!ar) return null
-      return { show: s, artist: ar, earned: calcAgentEarned(s, ar, agent.name) }
+      if (!ar) return []
+      const earned = calcAgentEarned(s, ar, agent.name)
+      if (earned <= 0) return []
+      return [{ show: s, artist: ar, earned }]
     })
-    .filter(Boolean) as ShowRow[]
 
   const unbatched = agentShows.filter(r => !r.show.agent_batch_ref)
   const batched   = agentShows.filter(r =>  r.show.agent_batch_ref)
@@ -245,7 +241,9 @@ export default function AgentPayoutsPage() {
                         <td className="font-medium">{a.name}</td>
                         <td>{s.event}</td>
                         <td className="text-xs text-gray-500">
-                          {(s.responsible_agent||"").toLowerCase() === agent.name.toLowerCase() ? "Main" : "Secondary"}
+                          {(s.responsible_agent||"").toLowerCase() === agent.name.toLowerCase() ? "Main" :
+                           (s.secondary_agent||"").toLowerCase() === agent.name.toLowerCase() ? "Secondary" :
+                           "Split"}
                         </td>
                         <td className="text-right font-mono">{ZAR(s.gross)}</td>
                         <td className="text-right font-mono font-semibold text-green-700">{ZAR(earned)}</td>

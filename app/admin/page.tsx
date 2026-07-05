@@ -502,8 +502,9 @@ export default function AdminPage() {
                         </tr>,
                         ...(!collapsed ? mShows.map(sh => {
                           const calc = calcShow(sh)
+                          const isDirect = sh.pay_type === "Direct"
                           return (
-                            <tr key={sh.id}>
+                            <tr key={sh.id} className={isDirect ? "opacity-50" : ""}>
                               <td className="text-gray-500 whitespace-nowrap">{fmtShortDate(sh.show_date)}</td>
                               <td className="text-gray-600 text-sm">
                                 <a href={`/admin/artists/${sh.artist_id}`} className="hover:underline">
@@ -514,7 +515,8 @@ export default function AdminPage() {
                               <td className="text-right font-mono">{ZAR(sh.gross || 0)}</td>
                               <td className="text-right font-mono text-gray-600">{ZAR(calc.comm)}</td>
                               <td className="text-right font-mono font-semibold">{ZAR(calc.nett)}</td>
-                              <td>
+                              <td className="flex items-center gap-1 flex-wrap">
+                                {isDirect && <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Direct</span>}
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${
                                   sh.status === "All Paid"     ? "bg-green-100 text-green-700"  :
                                   sh.status === "Fee Received" ? "bg-blue-100 text-blue-700"   :

@@ -62,6 +62,8 @@ export interface Show {
   invoiced_client: string | null
   agent_batch_ref: string | null
   advance: number
+  ticket_price: number | null
+  attendance: number | null
 }
 
 export interface Transfer {

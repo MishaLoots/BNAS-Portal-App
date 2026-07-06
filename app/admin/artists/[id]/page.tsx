@@ -804,14 +804,33 @@ export default function ArtistDetailPage() {
                 </div>
                 <div className="mt-2 border-t border-dashed pt-2 space-y-1">
                   <div className="text-xs text-gray-400 mb-1 uppercase tracking-wide">Balance breakdown</div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-purple-700">Warchest retained (net of distributions)</span>
-                    <span className="font-mono text-purple-700">{ZAR(wcPot)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-blue-700">Active deposits (pending shows)</span>
-                    <span className="font-mono text-blue-700">{ZAR(Math.max(0, eb.current - wcPot))}</span>
-                  </div>
+                  {wcPot >= 0 ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-purple-700">Warchest retained (net of distributions)</span>
+                        <span className="font-mono text-purple-700">{ZAR(wcPot)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-blue-700">Active deposits</span>
+                        <span className="font-mono text-blue-700">{ZAR(eb.current - wcPot)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-blue-700">Active deposits</span>
+                        <span className="font-mono text-blue-700">{ZAR(eb.current)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-orange-600">Warchest advance outstanding</span>
+                        <span className="font-mono text-orange-600">({ZAR(Math.abs(wcPot))})</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-medium border-t pt-1 mt-1">
+                        <span className="text-gray-600">Net free deposits</span>
+                        <span className="font-mono">{ZAR(eb.current + wcPot)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

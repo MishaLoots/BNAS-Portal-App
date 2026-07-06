@@ -496,7 +496,7 @@ export default function ArtistDetailPage() {
   const paid = payouts.reduce((s, p) => s + p.amount, 0)
   const owed = nettOwed(shows)
   const due  = owed - paid
-  const wcPot = warchestPot(shows)
+  const wcPot = warchestPot(shows, transfers)
 
   // Filtered shows for show log
   const filteredShows = shows.filter(s => {

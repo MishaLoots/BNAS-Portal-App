@@ -787,16 +787,17 @@ export default function ArtistDetailPage() {
                   <span>= Projected Balance</span>
                   <span className="font-mono">{ZAR(eb.projected)}</span>
                 </div>
-                <div className="flex justify-between py-2 text-gray-400 text-xs">
-                  <span>ⓘ Warchest retained in balance (partial deps)</span>
-                  <span className="font-mono">{ZAR(eb.warchestIn)}</span>
-                </div>
-                {wcPot > 0 && (
-                  <div className="flex justify-between py-2 border-t text-sm font-medium text-purple-700">
-                    <span>Warchest Pot (All Paid shows)</span>
-                    <span className="font-mono">{ZAR(wcPot)}</span>
+                <div className="mt-2 border-t border-dashed pt-2 space-y-1">
+                  <div className="text-xs text-gray-400 mb-1 uppercase tracking-wide">Balance breakdown</div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-purple-700">Warchest retained (net of distributions)</span>
+                    <span className="font-mono text-purple-700">{ZAR(wcPot)}</span>
                   </div>
-                )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-blue-700">Active deposits (pending shows)</span>
+                    <span className="font-mono text-blue-700">{ZAR(Math.max(0, eb.current - wcPot))}</span>
+                  </div>
+                </div>
               </div>
             </div>
 

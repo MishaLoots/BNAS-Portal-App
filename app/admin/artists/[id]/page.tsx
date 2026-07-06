@@ -340,6 +340,13 @@ export default function ArtistDetailPage() {
     setArtist(a => a ? { ...a, opening_balance: num } : a)
   }
 
+  async function updateOpeningWarchest(val: string) {
+    const num = parseFloat(val)
+    if (isNaN(num)) return
+    await supabase.from("artists").update({ opening_warchest: num }).eq("id", id)
+    setArtist(a => a ? { ...a, opening_warchest: num } : a)
+  }
+
   // Batch calculator helpers
   function toggleBatch(showId: string) {
     setBatchSelected(prev => {
@@ -496,7 +503,7 @@ export default function ArtistDetailPage() {
   const paid = payouts.reduce((s, p) => s + p.amount, 0)
   const owed = nettOwed(shows)
   const due  = owed - paid
-  const wcPot = warchestPot(shows, transfers)
+  const wcPot = warchestPot(shows, transfers, artist.opening_warchest || 0)
 
   // Filtered shows for show log
   const filteredShows = shows.filter(s => {
@@ -759,12 +766,20 @@ export default function ArtistDetailPage() {
             <div className="card max-w-lg">
               <h2 className="font-semibold text-navy mb-4">Escrow Balance Tracker</h2>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between py-2 border-b">
+                <div className="flex justify-between py-2">
                   <span className="text-gray-600">Opening Balance</span>
                   <input
                     type="number" className="w-36 text-right"
                     defaultValue={artist.opening_balance}
                     onBlur={e => updateOpeningBalance(e.target.value)}
+                  />
+                </div>
+                <div className="flex justify-between py-2 border-b">
+                  <span className="text-gray-500 text-xs">of which: Opening Warchest</span>
+                  <input
+                    type="number" className="w-36 text-right text-purple-700"
+                    defaultValue={artist.opening_warchest || 0}
+                    onBlur={e => updateOpeningWarchest(e.target.value)}
                   />
                 </div>
                 <div className="flex justify-between py-2">

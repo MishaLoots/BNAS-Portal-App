@@ -105,13 +105,13 @@ export function calcAgentEarned(s: Show, artist: Artist, agentName: string): num
   return toSplit * agentSplitPct(agentName, artist)
 }
 
-/** Total warchest retained in escrow from All Paid escrow shows, minus any Warchest Dist. transfers already paid out */
-export function warchestPot(shows: Show[], transfers: Transfer[] = []): number {
+/** Total warchest retained in escrow: opening warchest + warchest from All Paid shows, minus any Warchest Dist. transfers */
+export function warchestPot(shows: Show[], transfers: Transfer[] = [], openingWarchest = 0): number {
   const earned = shows
     .filter(s => s.pay_type === "Escrow" && s.status === "All Paid")
     .reduce((sum, s) => sum + calcShow(s).warchest, 0)
   const distributed = transfers
     .filter(t => t.transfer_type === "Warchest Dist.")
     .reduce((sum, t) => sum + t.amount, 0)
-  return earned - distributed
+  return openingWarchest + earned - distributed
 }

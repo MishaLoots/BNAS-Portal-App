@@ -6,6 +6,7 @@ export interface Artist {
   default_comm: number
   default_warchest: number
   opening_balance: number
+  opening_warchest: number
   loan_opening: number
   has_csr: boolean
   mus1_name: string

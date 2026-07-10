@@ -68,7 +68,6 @@ export function agentSplitPct(agentName: string, artist: Artist): number {
     case "misha":     return artist.misha_split_pct     || 0
     case "jako":      return artist.jako_split_pct      || 0
     case "que":       return artist.que_split_pct       || 0
-    case "andrei":    return artist.andrei_split_pct    || 0
     case "bnas pool": return artist.unalloc_split_pct   || 0
     default:          return 0
   }
@@ -82,26 +81,12 @@ export function calcAgentEarned(s: Show, artist: Artist, agentName: string): num
     const isAgent = (s.responsible_agent || "").toLowerCase() === "007" || (s.secondary_agent || "").toLowerCase() === "007"
     return isAgent ? s.gross * s.comm_pct : 0
   }
-  // Andrei — earns a fixed % of gross, but only when he's the responsible agent
-  if (name === "andrei") {
-    const isAgent = (s.responsible_agent || "").toLowerCase() === "andrei"
-    return isAgent ? s.gross * (artist.andrei_split_pct || 0) : 0
-  }
-  // Only deduct Andrei's take when he's actually on this show
-  const andreiIsAgent = (s.responsible_agent || "").toLowerCase() === "andrei"
-  const andreiTake = andreiIsAgent ? s.gross * (artist.andrei_split_pct || 0) : 0
-  const remainingComm = s.gross * s.comm_pct - andreiTake
+  const remainingComm = s.gross * s.comm_pct
   // BNAS Overhead — % of remaining commission
   if (name === "bnas overhead") {
     return remainingComm * (artist.bnas_overhead_pct || 0.2)
   }
   const toSplit = remainingComm * (1 - (artist.bnas_overhead_pct || 0.2))
-  // When Andrei booked: Misha and Gareth split pool 50/50 (= 40% each of remaining comm)
-  if (andreiIsAgent && (artist.andrei_split_pct || 0) > 0) {
-    if (name === "misha")  return toSplit * 0.5
-    if (name === "gareth") return toSplit * 0.5
-    return 0
-  }
   return toSplit * agentSplitPct(agentName, artist)
 }
 

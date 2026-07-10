@@ -11,7 +11,7 @@ type Tab = "shows" | "escrow" | "payouts" | "loan" | "batch"
 const SHOW_TYPES  = ["Rest/Club","Festival","Corporate","Private","Wed/Rec","Feature","Headline","INT Support","School","Other"]
 const STATUSES    = ["All Paid","Fee Received","Pending","Cancelled"]
 const XFER_TYPES  = ["Batch Payout","Warchest Dist.","Loan/Other","Refund","Other"]
-const AGENTS      = ["","Misha","Gareth","Jako","Que","Andrei","007"]
+const AGENTS      = ["","Misha","Gareth","Jako","Que","007"]
 
 function dbErr(error: { message?: string } | null, context: string) {
   if (error) alert(`Error ${context}: ${error.message || "Unknown error"}`)

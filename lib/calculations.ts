@@ -61,14 +61,15 @@ export function nettOwed(shows: Show[]) {
     .reduce((sum, s) => sum + calcShow(s).nett, 0)
 }
 
-/** Agent's split % for a given artist based on their name */
-export function agentSplitPct(agentName: string, artist: Artist): number {
+/** Agent's split % for a given artist based on their name, with date-aware prev split support */
+export function agentSplitPct(agentName: string, artist: Artist, showDate?: string): number {
+  const usePrev = !!(showDate && artist.split_effective_date && showDate < artist.split_effective_date)
   switch (agentName.toLowerCase()) {
     case "gareth":    return artist.gareth_split_pct    || 0
     case "misha":     return artist.misha_split_pct     || 0
-    case "jako":      return artist.jako_split_pct      || 0
+    case "jako":      return usePrev ? (artist.jako_split_pct_prev ?? artist.jako_split_pct) || 0 : artist.jako_split_pct || 0
     case "que":       return artist.que_split_pct       || 0
-    case "bnas pool": return artist.unalloc_split_pct   || 0
+    case "bnas pool": return usePrev ? (artist.unalloc_split_pct_prev ?? artist.unalloc_split_pct) || 0 : artist.unalloc_split_pct || 0
     default:          return 0
   }
 }
@@ -87,7 +88,7 @@ export function calcAgentEarned(s: Show, artist: Artist, agentName: string): num
     return remainingComm * (artist.bnas_overhead_pct || 0.2)
   }
   const toSplit = remainingComm * (1 - (artist.bnas_overhead_pct || 0.2))
-  return toSplit * agentSplitPct(agentName, artist)
+  return toSplit * agentSplitPct(agentName, artist, s.show_date)
 }
 
 /** Total warchest retained in escrow: opening warchest + warchest from All Paid shows, minus any Warchest Dist. transfers */

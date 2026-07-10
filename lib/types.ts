@@ -19,6 +19,9 @@ export interface Artist {
   jako_split_pct: number
   que_split_pct: number
   unalloc_split_pct: number
+  split_effective_date: string | null
+  jako_split_pct_prev: number | null
+  unalloc_split_pct_prev: number | null
 }
 
 export interface Agent {

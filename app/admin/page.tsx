@@ -459,7 +459,7 @@ export default function AdminPage() {
 
         {/* ── MONTHLY OVERVIEW TAB ── */}
         {tab === "monthly" && (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {monthGroups.length === 0 && (
               <p className="text-gray-400 text-sm">No shows found.</p>
             )}
@@ -469,15 +469,15 @@ export default function AdminPage() {
                 <div key={key} className="card p-0">
                   <button
                     onClick={() => toggleMonth(key)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center justify-between px-3 py-1.5 text-left hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2">
                       <span className={`text-xs text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
-                      <span className="font-semibold text-navy text-sm">{label}</span>
+                      <span className="font-semibold text-navy text-xs">{label}</span>
                       <span className="text-xs text-gray-400">{items.length} show{items.length !== 1 ? "s" : ""}</span>
                     </div>
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="text-xs text-gray-400">comm <span className="font-mono font-semibold text-bblue">{ZAR(totalComm)}</span></span>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-gray-400">comm <span className="font-mono font-semibold text-bblue">{ZAR(totalComm)}</span></span>
                       <span className="font-mono font-semibold text-gray-700">{ZAR(totalGross)}</span>
                     </div>
                   </button>

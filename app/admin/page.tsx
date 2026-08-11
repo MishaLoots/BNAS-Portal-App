@@ -489,12 +489,14 @@ export default function AdminPage() {
                               <th>Event</th>
                               <th>Type</th>
                               <th className="text-right">Gross</th>
+                              <th className="text-right">Commission</th>
                               <th>Status</th>
                             </tr>
                           </thead>
                           <tbody>
                             {items.map(({ show: sh, artistName }) => {
                               const isDirect = sh.pay_type === "Direct"
+                              const comm = sh.gross * sh.comm_pct
                               return (
                                 <tr key={sh.id} className={isDirect ? "opacity-50" : ""}>
                                   <td className="whitespace-nowrap text-gray-500">{fmtDate(sh.show_date)}</td>
@@ -502,6 +504,7 @@ export default function AdminPage() {
                                   <td className="font-medium">{sh.event}</td>
                                   <td className="text-gray-500">{sh.show_type || "—"}</td>
                                   <td className="text-right font-mono">{ZAR(sh.gross)}</td>
+                                  <td className="text-right font-mono text-bblue">{ZAR(comm)}</td>
                                   <td>
                                     <div className="flex items-center gap-1 flex-wrap">
                                       {isDirect && (
@@ -520,6 +523,7 @@ export default function AdminPage() {
                             <tr className="bg-lblue font-semibold text-sm">
                               <td colSpan={4}>Total</td>
                               <td className="text-right font-mono">{ZAR(monthGross)}</td>
+                              <td className="text-right font-mono text-bblue">{ZAR(items.reduce((s, x) => s + x.show.gross * x.show.comm_pct, 0))}</td>
                               <td></td>
                             </tr>
                           </tfoot>

@@ -164,14 +164,16 @@ export default function AdminPage() {
     shows.map(show => ({ show, artistName: artist.name }))
   ).sort((a, b) => a.show.show_date.localeCompare(b.show.show_date))
 
-  const monthGroups: { key: string; label: string; items: { show: Show; artistName: string }[] }[] = []
+  const monthGroups: { key: string; label: string; items: { show: Show; artistName: string }[]; totalGross: number; totalComm: number }[] = []
   for (const item of allShows) {
     const key = item.show.show_date.slice(0, 7)
     const last = monthGroups[monthGroups.length - 1]
     if (last && last.key === key) {
       last.items.push(item)
+      last.totalGross += item.show.gross
+      last.totalComm  += item.show.gross * item.show.comm_pct
     } else {
-      monthGroups.push({ key, label: monthLabel(item.show.show_date), items: [item] })
+      monthGroups.push({ key, label: monthLabel(item.show.show_date), items: [item], totalGross: item.show.gross, totalComm: item.show.gross * item.show.comm_pct })
     }
   }
 
@@ -457,31 +459,33 @@ export default function AdminPage() {
 
         {/* ── MONTHLY OVERVIEW TAB ── */}
         {tab === "monthly" && (
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             {monthGroups.length === 0 && (
               <p className="text-gray-400 text-sm">No shows found.</p>
             )}
-            {monthGroups.map(({ key, label, items }) => {
+            {monthGroups.map(({ key, label, items, totalGross, totalComm }) => {
               const isOpen = expandedMonths.has(key)
-              const monthGross = items.reduce((s, x) => s + x.show.gross, 0)
               return (
                 <div key={key} className="card p-0">
                   <button
                     onClick={() => toggleMonth(key)}
-                    className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50 transition-colors"
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className={`text-sm transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
-                      <span className="font-semibold text-navy">{label}</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className={`text-xs text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
+                      <span className="font-semibold text-navy text-sm">{label}</span>
                       <span className="text-xs text-gray-400">{items.length} show{items.length !== 1 ? "s" : ""}</span>
                     </div>
-                    <span className="font-mono text-sm font-semibold text-gray-700">{ZAR(monthGross)}</span>
+                    <div className="flex items-center gap-4 text-sm">
+                      <span className="text-xs text-gray-400">comm <span className="font-mono font-semibold text-bblue">{ZAR(totalComm)}</span></span>
+                      <span className="font-mono font-semibold text-gray-700">{ZAR(totalGross)}</span>
+                    </div>
                   </button>
 
                   {isOpen && (
                     <div className="border-t border-gray-100">
                       <div className="table-wrap rounded-none rounded-b-xl">
-                        <table>
+                        <table className="text-xs">
                           <thead>
                             <tr>
                               <th>Date</th>
@@ -499,18 +503,18 @@ export default function AdminPage() {
                               const comm = sh.gross * sh.comm_pct
                               return (
                                 <tr key={sh.id} className={isDirect ? "opacity-50" : ""}>
-                                  <td className="whitespace-nowrap text-gray-500">{fmtDate(sh.show_date)}</td>
-                                  <td className="text-gray-600">{artistName}</td>
-                                  <td className="font-medium">{sh.event}</td>
-                                  <td className="text-gray-500">{sh.show_type || "—"}</td>
-                                  <td className="text-right font-mono">{ZAR(sh.gross)}</td>
-                                  <td className="text-right font-mono text-bblue">{ZAR(comm)}</td>
-                                  <td>
+                                  <td className="whitespace-nowrap text-gray-500 py-1.5">{fmtDate(sh.show_date)}</td>
+                                  <td className="text-gray-600 py-1.5">{artistName}</td>
+                                  <td className="font-medium py-1.5">{sh.event}</td>
+                                  <td className="text-gray-500 py-1.5">{sh.show_type || "—"}</td>
+                                  <td className="text-right font-mono py-1.5">{ZAR(sh.gross)}</td>
+                                  <td className="text-right font-mono text-bblue py-1.5">{ZAR(comm)}</td>
+                                  <td className="py-1.5">
                                     <div className="flex items-center gap-1 flex-wrap">
                                       {isDirect && (
-                                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-500">Direct</span>
+                                        <span className="px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-500">Direct</span>
                                       )}
-                                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusColor(sh.status)}`}>
+                                      <span className={`px-1.5 py-0.5 rounded-full ${statusColor(sh.status)}`}>
                                         {sh.status || "—"}
                                       </span>
                                     </div>
@@ -520,10 +524,10 @@ export default function AdminPage() {
                             })}
                           </tbody>
                           <tfoot>
-                            <tr className="bg-lblue font-semibold text-sm">
-                              <td colSpan={4}>Total</td>
-                              <td className="text-right font-mono">{ZAR(monthGross)}</td>
-                              <td className="text-right font-mono text-bblue">{ZAR(items.reduce((s, x) => s + x.show.gross * x.show.comm_pct, 0))}</td>
+                            <tr className="bg-lblue font-semibold">
+                              <td colSpan={4} className="py-1.5">Total</td>
+                              <td className="text-right font-mono py-1.5">{ZAR(totalGross)}</td>
+                              <td className="text-right font-mono text-bblue py-1.5">{ZAR(totalComm)}</td>
                               <td></td>
                             </tr>
                           </tfoot>

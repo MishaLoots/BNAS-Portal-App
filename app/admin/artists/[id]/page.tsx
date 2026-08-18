@@ -593,7 +593,7 @@ export default function ArtistDetailPage() {
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
               <h2 className="font-semibold text-navy">Show Log</h2>
               <button
-                onClick={() => { if (showForm && !editingShowId) cancelShowForm(); else { cancelShowForm(); setShowForm(true) } }}
+                onClick={() => { if (showForm && !editingShowId) cancelShowForm(); else { cancelShowForm(); setNewShow(s => ({ ...s, comm_pct: String(artist?.default_comm ?? 0.20), warchest_pct: String(artist?.default_warchest ?? 0.20) })); setShowForm(true) } }}
                 className="btn-primary"
               >
                 {showForm && !editingShowId ? "Cancel" : "+ Add Show"}

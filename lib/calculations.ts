@@ -89,7 +89,11 @@ export function calcAgentEarned(s: Show, artist: Artist, agentName: string): num
     return remainingComm * (artist.bnas_overhead_pct || 0.2)
   }
   const toSplit = remainingComm * (1 - (artist.bnas_overhead_pct || 0.2))
-  return toSplit * agentSplitPct(agentName, artist, s.show_date)
+  const agentPct = agentSplitPct(agentName, artist, s.show_date)
+  // If agent has no personal split but is responsible, they earn the unallocated portion
+  const isResponsible = (s.responsible_agent || "").toLowerCase() === name
+  const unallocBonus = (isResponsible && agentPct === 0) ? (artist.unalloc_split_pct || 0) : 0
+  return toSplit * (agentPct + unallocBonus)
 }
 
 /** Total warchest retained in escrow: opening warchest + warchest from All Paid shows, minus any Warchest Dist. transfers */

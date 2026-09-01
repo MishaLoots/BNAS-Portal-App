@@ -4,7 +4,7 @@ export const ZAR = (n: number) =>
   "R\u00a0" + n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export function calcShow(s: Show) {
-  const comm      = s.gross * s.comm_pct
+  const comm      = s.comm_override != null ? s.comm_override : s.gross * s.comm_pct
   const totalBand = s.sound + s.mus1 + s.mus2 + s.mus3 + (s.mus4 || 0) + s.other_costs
   const subtotal  = s.gross - comm - totalBand
   const warchest  = s.pay_type === "Escrow" ? subtotal * s.warchest_pct : 0
@@ -78,11 +78,12 @@ export function agentSplitPct(agentName: string, artist: Artist, showDate?: stri
 export function calcAgentEarned(s: Show, artist: Artist, agentName: string): number {
   const name = agentName.toLowerCase()
   // 007 test agent — earns full BNAS commission on shows they're responsible for
+  const effectiveComm = s.comm_override != null ? s.comm_override : s.gross * s.comm_pct
   if (name === "007") {
     const isAgent = (s.responsible_agent || "").toLowerCase() === "007" || (s.secondary_agent || "").toLowerCase() === "007"
-    return isAgent ? s.gross * s.comm_pct : 0
+    return isAgent ? effectiveComm : 0
   }
-  const remainingComm = s.gross * s.comm_pct
+  const remainingComm = effectiveComm
   // BNAS Overhead — % of remaining commission
   if (name === "bnas overhead") {
     return remainingComm * (artist.bnas_overhead_pct || 0.2)

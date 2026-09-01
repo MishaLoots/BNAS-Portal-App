@@ -30,7 +30,7 @@ const BLANK_SHOW = {
   mus3: "0", mus4: "0", other_costs: "0", warchest_pct: "0.20",
   batch_num: "", status: "Pending", dep_pct: "0", dep_is_pre: false, notes: "",
   responsible_agent: "", secondary_agent: "", invoiced_client: "", advance: "0",
-  ticket_price: "", attendance: "",
+  ticket_price: "", attendance: "", comm_override: "",
 }
 
 export default function ArtistDetailPage() {
@@ -142,6 +142,7 @@ export default function ArtistDetailPage() {
       notes: s.notes || "",
       responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "", invoiced_client: s.invoiced_client || "", advance: String(s.advance || 0),
       ticket_price: s.ticket_price != null ? String(s.ticket_price) : "", attendance: s.attendance != null ? String(s.attendance) : "",
+      comm_override: s.comm_override != null ? String(s.comm_override) : "",
     })
     setShowForm(true)
   }
@@ -180,6 +181,7 @@ export default function ArtistDetailPage() {
       advance: parseFloat(newShow.advance) || 0,
       ticket_price: newShow.ticket_price !== "" ? parseFloat(newShow.ticket_price) : null,
       attendance: newShow.attendance !== "" ? parseInt(newShow.attendance) : null,
+      comm_override: newShow.comm_override !== "" ? parseFloat(newShow.comm_override) : null,
     }
     if (editingShowId) {
       const { error } = await supabase.from("shows").update(payload).eq("id", editingShowId)
@@ -622,6 +624,7 @@ export default function ArtistDetailPage() {
                   <div><label>Gross (R)</label><input type="number" value={newShow.gross} onChange={e => setNewShow(s => ({ ...s, gross: e.target.value }))} /></div>
                   <div><label>Pay Type</label><select value={newShow.pay_type} onChange={e => setNewShow(s => ({ ...s, pay_type: e.target.value }))}><option>Escrow</option><option>Direct</option></select></div>
                   <div><label>Comm %</label><input type="number" step="0.01" value={newShow.comm_pct} onChange={e => setNewShow(s => ({ ...s, comm_pct: e.target.value }))} /></div>
+                  <div><label className="flex items-center gap-1">Fixed Comm (R) <span className="text-xs text-gray-400 font-normal">overrides %</span></label><input type="number" step="1" placeholder="leave blank for %" value={newShow.comm_override} onChange={e => setNewShow(s => ({ ...s, comm_override: e.target.value }))} /></div>
                   <div><label>Warchest %</label><input type="number" step="0.01" value={newShow.warchest_pct} onChange={e => setNewShow(s => ({ ...s, warchest_pct: e.target.value }))} /></div>
                   <div><label>Sound (R)</label><input type="number" value={newShow.sound} onChange={e => setNewShow(s => ({ ...s, sound: e.target.value }))} /></div>
                   {artist.mus1_name && <div><label>{artist.mus1_name} (R)</label><input type="number" value={newShow.mus1} onChange={e => setNewShow(s => ({ ...s, mus1: e.target.value }))} /></div>}

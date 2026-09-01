@@ -67,6 +67,7 @@ export interface Show {
   advance: number
   ticket_price: number | null
   attendance: number | null
+  comm_override: number | null
 }
 
 export interface Transfer {

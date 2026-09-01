@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
 import type { Artist, Show, Transfer, Payout, Agent, AgentPayout } from "@/lib/types"
-import { ZAR, escrowBalance, nettOwed, totalConfirmed, calcAgentEarned } from "@/lib/calculations"
+import { ZAR, escrowBalance, nettOwed, totalConfirmed, calcAgentEarned, calcShow } from "@/lib/calculations"
 
 interface ArtistRow {
   artist: Artist
@@ -171,9 +171,9 @@ export default function AdminPage() {
     if (last && last.key === key) {
       last.items.push(item)
       last.totalGross += item.show.gross
-      last.totalComm  += item.show.gross * item.show.comm_pct
+      last.totalComm  += calcShow(item.show).comm
     } else {
-      monthGroups.push({ key, label: monthLabel(item.show.show_date), items: [item], totalGross: item.show.gross, totalComm: item.show.gross * item.show.comm_pct })
+      monthGroups.push({ key, label: monthLabel(item.show.show_date), items: [item], totalGross: item.show.gross, totalComm: calcShow(item.show).comm })
     }
   }
 
@@ -500,7 +500,7 @@ export default function AdminPage() {
                           <tbody>
                             {items.map(({ show: sh, artistName }) => {
                               const isDirect = sh.pay_type === "Direct"
-                              const comm = sh.gross * sh.comm_pct
+                              const comm = calcShow(sh).comm
                               return (
                                 <tr key={sh.id} className={isDirect ? "opacity-50" : ""}>
                                   <td className="whitespace-nowrap text-gray-500 py-1.5">{fmtDate(sh.show_date)}</td>

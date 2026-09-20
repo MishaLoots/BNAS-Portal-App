@@ -168,14 +168,17 @@ export default function AdminPage() {
   for (const item of allShows) {
     const key = item.show.show_date.slice(0, 7)
     const last = monthGroups[monthGroups.length - 1]
-    const isPaid = item.show.status === "All Paid"
+    const sh = item.show
+    const receivedGross = sh.status === "All Paid"
+      ? sh.gross
+      : sh.gross * (sh.dep_pct ?? 0) / 100
     if (last && last.key === key) {
       last.items.push(item)
-      last.totalGross += item.show.gross
-      last.totalComm  += calcShow(item.show).comm
-      if (isPaid) last.paidGross += item.show.gross
+      last.totalGross += sh.gross
+      last.totalComm  += calcShow(sh).comm
+      last.paidGross  += receivedGross
     } else {
-      monthGroups.push({ key, label: monthLabel(item.show.show_date), items: [item], totalGross: item.show.gross, totalComm: calcShow(item.show).comm, paidGross: isPaid ? item.show.gross : 0 })
+      monthGroups.push({ key, label: monthLabel(sh.show_date), items: [item], totalGross: sh.gross, totalComm: calcShow(sh).comm, paidGross: receivedGross })
     }
   }
 
@@ -507,7 +510,7 @@ export default function AdminPage() {
                             {items.map(({ show: sh, artistName }) => {
                               const isDirect = sh.pay_type === "Direct"
                               const comm = calcShow(sh).comm
-                              const pctRec = (sh.status === "All Paid" || sh.status === "Fee Received")
+                              const pctRec = sh.status === "All Paid"
                                 ? 100
                                 : sh.status === "Cancelled"
                                 ? 0

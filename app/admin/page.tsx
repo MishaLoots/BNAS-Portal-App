@@ -499,6 +499,7 @@ export default function AdminPage() {
                               <th>Type</th>
                               <th className="text-right">Gross</th>
                               <th className="text-right">Commission</th>
+                              <th className="text-right">Received</th>
                               <th>Status</th>
                             </tr>
                           </thead>
@@ -506,6 +507,12 @@ export default function AdminPage() {
                             {items.map(({ show: sh, artistName }) => {
                               const isDirect = sh.pay_type === "Direct"
                               const comm = calcShow(sh).comm
+                              const pctRec = (sh.status === "All Paid" || sh.status === "Fee Received")
+                                ? 100
+                                : sh.status === "Cancelled"
+                                ? 0
+                                : (sh.dep_pct ?? 0)
+                              const recColor = pctRec === 100 ? "text-green-600" : pctRec > 0 ? "text-orange-500" : "text-red-400"
                               return (
                                 <tr key={sh.id} className={isDirect ? "opacity-50" : ""}>
                                   <td className="whitespace-nowrap text-gray-500 py-1.5">{fmtDate(sh.show_date)}</td>
@@ -514,6 +521,7 @@ export default function AdminPage() {
                                   <td className="text-gray-500 py-1.5">{sh.show_type || "—"}</td>
                                   <td className="text-right font-mono py-1.5">{ZAR(sh.gross)}</td>
                                   <td className="text-right font-mono text-bblue py-1.5">{ZAR(comm)}</td>
+                                  <td className={`text-right font-mono font-semibold py-1.5 ${recColor}`}>{pctRec}%</td>
                                   <td className="py-1.5">
                                     <div className="flex items-center gap-1 flex-wrap">
                                       {isDirect && (
@@ -533,6 +541,7 @@ export default function AdminPage() {
                               <td colSpan={4} className="py-1.5">Total</td>
                               <td className="text-right font-mono py-1.5">{ZAR(totalGross)}</td>
                               <td className="text-right font-mono text-bblue py-1.5">{ZAR(totalComm)}</td>
+                              <td></td>
                               <td></td>
                             </tr>
                           </tfoot>

@@ -164,16 +164,18 @@ export default function AdminPage() {
     shows.map(show => ({ show, artistName: artist.name }))
   ).sort((a, b) => a.show.show_date.localeCompare(b.show.show_date))
 
-  const monthGroups: { key: string; label: string; items: { show: Show; artistName: string }[]; totalGross: number; totalComm: number }[] = []
+  const monthGroups: { key: string; label: string; items: { show: Show; artistName: string }[]; totalGross: number; totalComm: number; paidGross: number }[] = []
   for (const item of allShows) {
     const key = item.show.show_date.slice(0, 7)
     const last = monthGroups[monthGroups.length - 1]
+    const isPaid = item.show.status === "All Paid"
     if (last && last.key === key) {
       last.items.push(item)
       last.totalGross += item.show.gross
       last.totalComm  += calcShow(item.show).comm
+      if (isPaid) last.paidGross += item.show.gross
     } else {
-      monthGroups.push({ key, label: monthLabel(item.show.show_date), items: [item], totalGross: item.show.gross, totalComm: calcShow(item.show).comm })
+      monthGroups.push({ key, label: monthLabel(item.show.show_date), items: [item], totalGross: item.show.gross, totalComm: calcShow(item.show).comm, paidGross: isPaid ? item.show.gross : 0 })
     }
   }
 
@@ -463,8 +465,10 @@ export default function AdminPage() {
             {monthGroups.length === 0 && (
               <p className="text-gray-400 text-sm">No shows found.</p>
             )}
-            {monthGroups.map(({ key, label, items, totalGross, totalComm }) => {
+            {monthGroups.map(({ key, label, items, totalGross, totalComm, paidGross }) => {
               const isOpen = expandedMonths.has(key)
+              const pctReceived = totalGross > 0 ? Math.round((paidGross / totalGross) * 100) : 0
+              const pctColor = pctReceived === 100 ? "text-green-600" : pctReceived >= 50 ? "text-orange-500" : "text-red-500"
               return (
                 <div key={key} className="card p-0">
                   <button
@@ -475,6 +479,7 @@ export default function AdminPage() {
                       <span className={`text-xs text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▶</span>
                       <span className="font-semibold text-navy text-sm">{label}</span>
                       <span className="text-xs text-gray-400">{items.length} show{items.length !== 1 ? "s" : ""}</span>
+                      <span className={`text-xs font-semibold ${pctColor}`}>{pctReceived}% received</span>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
                       <span className="text-xs text-gray-400">comm <span className="font-mono font-semibold text-bblue">{ZAR(totalComm)}</span></span>

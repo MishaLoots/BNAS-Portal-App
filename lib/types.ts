@@ -22,6 +22,7 @@ export interface Artist {
   split_effective_date: string | null
   jako_split_pct_prev: number | null
   unalloc_split_pct_prev: number | null
+  jean_split_pct: number
 }
 
 export interface Agent {
@@ -68,6 +69,7 @@ export interface Show {
   ticket_price: number | null
   attendance: number | null
   comm_override: number | null
+  jean_advancing: boolean
 }
 
 export interface Transfer {

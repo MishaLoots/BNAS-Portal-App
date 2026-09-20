@@ -30,7 +30,7 @@ const BLANK_SHOW = {
   mus3: "0", mus4: "0", other_costs: "0", warchest_pct: "0.20",
   batch_num: "", status: "Pending", dep_pct: "0", dep_is_pre: false, notes: "",
   responsible_agent: "", secondary_agent: "", invoiced_client: "", advance: "0",
-  ticket_price: "", attendance: "", comm_override: "",
+  ticket_price: "", attendance: "", comm_override: "", jean_advancing: false,
 }
 
 export default function ArtistDetailPage() {
@@ -143,6 +143,7 @@ export default function ArtistDetailPage() {
       responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "", invoiced_client: s.invoiced_client || "", advance: String(s.advance || 0),
       ticket_price: s.ticket_price != null ? String(s.ticket_price) : "", attendance: s.attendance != null ? String(s.attendance) : "",
       comm_override: s.comm_override != null ? String(s.comm_override) : "",
+      jean_advancing: s.jean_advancing || false,
     })
     setShowForm(true)
   }
@@ -182,6 +183,7 @@ export default function ArtistDetailPage() {
       ticket_price: newShow.ticket_price !== "" ? parseFloat(newShow.ticket_price) : null,
       attendance: newShow.attendance !== "" ? parseInt(newShow.attendance) : null,
       comm_override: newShow.comm_override !== "" ? parseFloat(newShow.comm_override) : null,
+      jean_advancing: newShow.jean_advancing,
     }
     if (editingShowId) {
       const { error } = await supabase.from("shows").update(payload).eq("id", editingShowId)
@@ -641,6 +643,10 @@ export default function ArtistDetailPage() {
                   </div>
                   <div><label>Responsible Agent</label><select value={newShow.responsible_agent} onChange={e => setNewShow(s => ({ ...s, responsible_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
                   <div><label>Secondary Agent</label><select value={newShow.secondary_agent} onChange={e => setNewShow(s => ({ ...s, secondary_agent: e.target.value }))}>{AGENTS.map(a => <option key={a} value={a}>{a || "—"}</option>)}</select></div>
+                  <div className="flex items-end gap-2">
+                    <input type="checkbox" id="jean_adv" checked={newShow.jean_advancing} onChange={e => setNewShow(s => ({ ...s, jean_advancing: e.target.checked }))} className="w-auto" />
+                    <label htmlFor="jean_adv" className="mb-0">Jean advancing</label>
+                  </div>
                   <div><label>Invoiced Client</label><input value={newShow.invoiced_client} onChange={e => setNewShow(s => ({ ...s, invoiced_client: e.target.value }))} placeholder="Who is paying?" /></div>
                   <div><label>Pre-Show Advance (R)</label><input type="number" value={newShow.advance} onChange={e => setNewShow(s => ({ ...s, advance: e.target.value }))} placeholder="0" /></div>
                   <div><label>Ticket Price (R)</label><input type="number" value={newShow.ticket_price} onChange={e => setNewShow(s => ({ ...s, ticket_price: e.target.value }))} placeholder="0" /></div>

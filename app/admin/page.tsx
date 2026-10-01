@@ -55,6 +55,8 @@ export default function AdminPage() {
   const [editingPayout, setEditingPayout] = useState<AgentPayout | null>(null)
   const [payoutForm, setPayoutForm] = useState<{ agent_id: string; payout_date: string; amount: string; payout_type: string; description: string } | null>(null)
   const [saving, setSaving] = useState(false)
+  // Jean bulk-assign mode: set of show ids ticked as "Jean advancing"
+  const [jeanSel, setJeanSel] = useState<Set<string> | null>(null)
 
   async function load() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -105,6 +107,36 @@ export default function AdminPage() {
   }
 
   useEffect(() => { load() }, [router])
+
+  function startJeanMode() {
+    const ids = rows.flatMap(r => r.shows).filter(s => s.jean_advancing).map(s => s.id)
+    setJeanSel(new Set(ids))
+  }
+
+  function toggleJean(ids: string[], on: boolean) {
+    setJeanSel(prev => {
+      if (!prev) return prev
+      const next = new Set(prev)
+      ids.forEach(id => on ? next.add(id) : next.delete(id))
+      return next
+    })
+  }
+
+  async function saveJean() {
+    if (!jeanSel) return
+    const all = rows.flatMap(r => r.shows)
+    const toAdd    = all.filter(s => !s.jean_advancing && jeanSel.has(s.id)).map(s => s.id)
+    const toRemove = all.filter(s => s.jean_advancing && !jeanSel.has(s.id)).map(s => s.id)
+    setSaving(true)
+    const results = await Promise.all([
+      toAdd.length    ? supabase.from("shows").update({ jean_advancing: true  }).in("id", toAdd)    : null,
+      toRemove.length ? supabase.from("shows").update({ jean_advancing: false }).in("id", toRemove) : null,
+    ])
+    const err = results.find(r => r?.error)?.error
+    if (err) window.alert("Could not save: " + err.message)
+    else setJeanSel(null)
+    await load(); setSaving(false)
+  }
 
   function toggleMonth(key: string) {
     setExpandedMonths(prev => {
@@ -160,11 +192,11 @@ export default function AdminPage() {
   }, { current: 0, pending: 0, projected: 0, confirmed2026: 0, confirmed2027: 0, nettOwed: 0, nettPaid: 0, due: 0 })
 
   // Build monthly overview: all shows across all artists, grouped by month
-  const allShows: { show: Show; artistName: string }[] = rows.flatMap(({ artist, shows }) =>
-    shows.map(show => ({ show, artistName: artist.name }))
+  const allShows: { show: Show; artistName: string; artist: Artist }[] = rows.flatMap(({ artist, shows }) =>
+    shows.map(show => ({ show, artistName: artist.name, artist }))
   ).sort((a, b) => a.show.show_date.localeCompare(b.show.show_date))
 
-  const monthGroups: { key: string; label: string; items: { show: Show; artistName: string }[]; totalGross: number; totalComm: number; paidGross: number }[] = []
+  const monthGroups: { key: string; label: string; items: { show: Show; artistName: string; artist: Artist }[]; totalGross: number; totalComm: number; paidGross: number }[] = []
   for (const item of allShows) {
     const key = item.show.show_date.slice(0, 7)
     const last = monthGroups[monthGroups.length - 1]
@@ -465,6 +497,26 @@ export default function AdminPage() {
         {/* ── MONTHLY OVERVIEW TAB ── */}
         {tab === "monthly" && (
           <div className="space-y-2">
+            {(() => {
+              if (!jeanSel) return (
+                <div className="flex justify-end">
+                  <button onClick={startJeanMode} className="btn-secondary text-sm">👤 Assign Jean to shows</button>
+                </div>
+              )
+              const all = rows.flatMap(r => r.shows)
+              const changes = all.filter(s => s.jean_advancing !== jeanSel.has(s.id)).length
+              return (
+                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-lblue border border-bblue/30 rounded-lg px-4 py-2 text-sm">
+                  <span className="text-navy">
+                    <span className="font-semibold">Assigning Jean</span> — tick the shows he's advancing. {jeanSel.size} selected{changes > 0 && <>, <span className="font-semibold">{changes} change{changes !== 1 ? "s" : ""}</span> unsaved</>}
+                  </span>
+                  <div className="flex gap-2">
+                    <button onClick={saveJean} disabled={saving || changes === 0} className="btn-primary text-xs py-1">{saving ? "Saving…" : "Save"}</button>
+                    <button onClick={() => setJeanSel(null)} disabled={saving} className="btn-ghost text-xs py-1">Cancel</button>
+                  </div>
+                </div>
+              )
+            })()}
             {monthGroups.length === 0 && (
               <p className="text-gray-400 text-sm">No shows found.</p>
             )}
@@ -496,6 +548,17 @@ export default function AdminPage() {
                         <table className="text-xs">
                           <thead>
                             <tr>
+                              {jeanSel && (
+                                <th className="w-8">
+                                  <input
+                                    type="checkbox"
+                                    className="w-auto"
+                                    title="Select all shows in this month"
+                                    checked={items.every(i => jeanSel.has(i.show.id))}
+                                    onChange={e => toggleJean(items.map(i => i.show.id), e.target.checked)}
+                                  />
+                                </th>
+                              )}
                               <th>Date</th>
                               <th>Artist</th>
                               <th>Event</th>
@@ -507,7 +570,7 @@ export default function AdminPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {items.map(({ show: sh, artistName }) => {
+                            {items.map(({ show: sh, artistName, artist }) => {
                               const isDirect = sh.pay_type === "Direct"
                               const comm = calcShow(sh).comm
                               const pctRec = sh.status === "All Paid"
@@ -518,6 +581,16 @@ export default function AdminPage() {
                               const recColor = pctRec === 100 ? "text-green-600" : pctRec > 0 ? "text-orange-500" : "text-red-400"
                               return (
                                 <tr key={sh.id} className={isDirect ? "opacity-50" : ""}>
+                                  {jeanSel && (
+                                    <td className="py-1.5">
+                                      <input
+                                        type="checkbox"
+                                        className="w-auto"
+                                        checked={jeanSel.has(sh.id)}
+                                        onChange={e => toggleJean([sh.id], e.target.checked)}
+                                      />
+                                    </td>
+                                  )}
                                   <td className="whitespace-nowrap text-gray-500 py-1.5">{fmtDate(sh.show_date)}</td>
                                   <td className="text-gray-600 py-1.5">{artistName}</td>
                                   <td className="font-medium py-1.5">{sh.event}</td>
@@ -530,6 +603,12 @@ export default function AdminPage() {
                                       {isDirect && (
                                         <span className="px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-500">Direct</span>
                                       )}
+                                      {(jeanSel ? jeanSel.has(sh.id) : sh.jean_advancing) && (
+                                        <span
+                                          className={`px-1.5 py-0.5 rounded-full ${artist.jean_split_pct ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-400 line-through"}`}
+                                          title={artist.jean_split_pct ? `Jean advancing (${Math.round(artist.jean_split_pct * 100)}% split)` : `${artistName} has no Jean split % set — he earns nothing on this show`}
+                                        >Jean</span>
+                                      )}
                                       <span className={`px-1.5 py-0.5 rounded-full ${statusColor(sh.status)}`}>
                                         {sh.status || "—"}
                                       </span>
@@ -541,7 +620,7 @@ export default function AdminPage() {
                           </tbody>
                           <tfoot>
                             <tr className="bg-lblue font-semibold">
-                              <td colSpan={4} className="py-1.5">Total</td>
+                              <td colSpan={jeanSel ? 5 : 4} className="py-1.5">Total</td>
                               <td className="text-right font-mono py-1.5">{ZAR(totalGross)}</td>
                               <td className="text-right font-mono text-bblue py-1.5">{ZAR(totalComm)}</td>
                               <td></td>

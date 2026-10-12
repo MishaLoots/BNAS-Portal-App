@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
+import { calcShow } from "@/lib/calculations"
 
 const adminClient = () => createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,17 +42,14 @@ export async function GET(req: NextRequest) {
   const artistMap = Object.fromEntries((artists || []).map(a => [a.id, a.name]))
 
   const showsCSV = toCSV(
-    ["Artist","Date","Event","Type","Pay Type","Gross","Comm%","Commission","Sound","Mus1","Mus2","Mus3","Mus4","Other","Warchest%","Warchest","Nett","Batch","Status","Agent","Notes"],
+    ["Artist","Date","Event","Type","Pay Type","Gross","Comm%","Comm Override","Commission","Sound","Mus1","Mus2","Mus3","Mus4","Other","Warchest%","Warchest","Advance","Nett","Batch","Status","Agent","Jean","Notes"],
     (shows || []).map(s => {
-      const comm = s.gross * s.comm_pct
-      const band = s.sound + s.mus1 + s.mus2 + s.mus3 + (s.mus4||0) + s.other_costs
-      const sub  = s.gross - comm - band
-      const wc   = s.pay_type === "Escrow" ? sub * s.warchest_pct : 0
-      const nett = sub - wc
+      // Same maths as the portal (fixed comm override + pre-show advance)
+      const c = calcShow(s)
       return [artistMap[s.artist_id], s.show_date, s.event, s.show_type, s.pay_type,
-        s.gross, s.comm_pct, comm.toFixed(2), s.sound, s.mus1, s.mus2, s.mus3, s.mus4||0,
-        s.other_costs, s.warchest_pct, wc.toFixed(2), nett.toFixed(2),
-        s.batch_num||"", s.status||"", s.responsible_agent||"", s.notes||""]
+        s.gross, s.comm_pct, s.comm_override ?? "", c.comm.toFixed(2), s.sound, s.mus1, s.mus2, s.mus3, s.mus4||0,
+        s.other_costs, s.warchest_pct, c.warchest.toFixed(2), c.advance.toFixed(2), c.nett.toFixed(2),
+        s.batch_num||"", s.status||"", s.responsible_agent||"", s.jean_advancing ? "Yes" : "", s.notes||""]
     })
   )
 

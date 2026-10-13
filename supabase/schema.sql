@@ -34,7 +34,7 @@ create table public.shows (
   other_costs numeric default 0,
   warchest_pct numeric default 0.20,
   batch_num   text,
-  status      text,                    -- 'All Paid' | 'Fee Received' | 'Pending' | 'Cancelled'
+  status      text,                    -- 'All Paid' | 'Fee Received' | 'Invoiced' | 'Pending' | 'Cancelled'
   dep_pct     numeric,                 -- 0-100; null = not set
   dep_is_pre  boolean default false,   -- true = pre-period deposit (in opening balance)
   notes       text,

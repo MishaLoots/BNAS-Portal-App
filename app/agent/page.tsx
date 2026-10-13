@@ -270,6 +270,7 @@ export default function AgentPage() {
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${
                                   r.status === "All Paid" ? "bg-green-100 text-green-700" :
                                   r.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
+                                  r.status === "Invoiced" ? "bg-orange-100 text-orange-700" :
                                   r.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
                                   "bg-gray-100 text-gray-500"
                                 }`}>{r.status || "—"}</span>

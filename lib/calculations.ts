@@ -13,6 +13,12 @@ export function calcShow(s: Show) {
   return { comm, totalBand, subtotal, warchest, advance, nett }
 }
 
+/** Commission when it was charged on top of the artist fee: total = fee × (1 + pct), so comm = total − total / (1 + pct) */
+export function commOnTop(total: number, pct: number): number {
+  if (!total || pct <= -1) return 0
+  return Math.round((total - total / (1 + pct)) * 100) / 100
+}
+
 /** Amount that counts as received into escrow from this show */
 export function depAmount(s: Show): number {
   if (s.pay_type !== "Escrow") return 0

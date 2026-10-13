@@ -37,6 +37,7 @@ function statusColor(status: string | null): string {
   switch (status) {
     case "All Paid":      return "bg-green-100 text-green-700"
     case "Fee Received":  return "bg-blue-100 text-blue-700"
+    case "Invoiced":      return "bg-orange-100 text-orange-700"
     case "Pending":       return "bg-yellow-100 text-yellow-700"
     case "Cancelled":     return "bg-red-100 text-red-500"
     default:              return "bg-gray-100 text-gray-500"

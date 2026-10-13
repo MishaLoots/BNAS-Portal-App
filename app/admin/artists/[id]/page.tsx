@@ -4,12 +4,12 @@ import { useRouter, useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import Navbar from "@/components/Navbar"
 import type { Artist, Show, Transfer, Payout, LoanRepayment, Batch } from "@/lib/types"
-import { ZAR, calcShow, escrowBalance, nettOwed, warchestPot } from "@/lib/calculations"
+import { ZAR, calcShow, commOnTop, escrowBalance, nettOwed, warchestPot } from "@/lib/calculations"
 
 type Tab = "shows" | "escrow" | "payouts" | "loan" | "batch"
 
 const SHOW_TYPES  = ["Rest/Club","Festival","Corporate","Private","Wed/Rec","Feature","Headline","INT Support","School","Other"]
-const STATUSES    = ["All Paid","Fee Received","Pending","Cancelled"]
+const STATUSES    = ["All Paid","Fee Received","Invoiced","Pending","Cancelled"]
 const XFER_TYPES  = ["Batch Payout","Warchest Dist.","Loan/Other","Refund","Other"]
 const AGENTS      = ["","Misha","Gareth","Jako","Que","007"]
 
@@ -30,7 +30,7 @@ const BLANK_SHOW = {
   mus3: "0", mus4: "0", other_costs: "0", warchest_pct: "0.20",
   batch_num: "", status: "Pending", dep_pct: "0", dep_is_pre: false, notes: "",
   responsible_agent: "", secondary_agent: "", invoiced_client: "", advance: "0",
-  ticket_price: "", attendance: "", comm_override: "", jean_advancing: false,
+  ticket_price: "", attendance: "", comm_override: "", comm_on_top: false, jean_advancing: false,
 }
 
 export default function ArtistDetailPage() {
@@ -143,6 +143,8 @@ export default function ArtistDetailPage() {
       responsible_agent: s.responsible_agent || "", secondary_agent: s.secondary_agent || "", invoiced_client: s.invoiced_client || "", advance: String(s.advance || 0),
       ticket_price: s.ticket_price != null ? String(s.ticket_price) : "", attendance: s.attendance != null ? String(s.attendance) : "",
       comm_override: s.comm_override != null ? String(s.comm_override) : "",
+      // Tick "on top" if the saved fixed comm is exactly the on-top amount
+      comm_on_top: s.comm_override != null && s.comm_pct > 0 && Math.abs(s.comm_override - commOnTop(s.gross, s.comm_pct)) < 0.01,
       jean_advancing: s.jean_advancing || false,
     })
     setShowForm(true)
@@ -182,7 +184,9 @@ export default function ArtistDetailPage() {
       advance: parseFloat(newShow.advance) || 0,
       ticket_price: newShow.ticket_price !== "" ? parseFloat(newShow.ticket_price) : null,
       attendance: newShow.attendance !== "" ? parseInt(newShow.attendance) : null,
-      comm_override: newShow.comm_override !== "" ? parseFloat(newShow.comm_override) : null,
+      comm_override: newShow.comm_on_top
+        ? commOnTop(parseFloat(newShow.gross) || 0, parseFloat(newShow.comm_pct) || 0)
+        : newShow.comm_override !== "" ? parseFloat(newShow.comm_override) : null,
       jean_advancing: newShow.jean_advancing,
     }
     if (editingShowId) {
@@ -626,7 +630,25 @@ export default function ArtistDetailPage() {
                   <div><label>Gross (R)</label><input type="number" value={newShow.gross} onChange={e => setNewShow(s => ({ ...s, gross: e.target.value }))} /></div>
                   <div><label>Pay Type</label><select value={newShow.pay_type} onChange={e => setNewShow(s => ({ ...s, pay_type: e.target.value }))}><option>Escrow</option><option>Direct</option></select></div>
                   <div><label>Comm %</label><input type="number" step="0.01" value={newShow.comm_pct} onChange={e => setNewShow(s => ({ ...s, comm_pct: e.target.value }))} /></div>
-                  <div><label className="flex items-center gap-1">Fixed Comm (R) <span className="text-xs text-gray-400 font-normal">overrides %</span></label><input type="number" step="1" placeholder="leave blank for %" value={newShow.comm_override} onChange={e => setNewShow(s => ({ ...s, comm_override: e.target.value }))} /></div>
+                  <div>
+                    <label className="flex items-center gap-1">Fixed Comm (R) <span className="text-xs text-gray-400 font-normal">overrides %</span></label>
+                    {newShow.comm_on_top ? (() => {
+                      const gross = parseFloat(newShow.gross) || 0
+                      const comm  = commOnTop(gross, parseFloat(newShow.comm_pct) || 0)
+                      return (
+                        <>
+                          <input type="number" value={comm} disabled />
+                          <div className="text-xs text-gray-500 mt-0.5">Artist fee {ZAR(gross - comm)}</div>
+                        </>
+                      )
+                    })() : (
+                      <input type="number" step="1" placeholder="leave blank for %" value={newShow.comm_override} onChange={e => setNewShow(s => ({ ...s, comm_override: e.target.value }))} />
+                    )}
+                    <label className="flex items-center gap-1 mt-1 mb-0 text-xs font-normal text-gray-600" title="Gross is what the client paid: artist fee plus our % on top">
+                      <input type="checkbox" className="w-auto" checked={newShow.comm_on_top} onChange={e => setNewShow(s => ({ ...s, comm_on_top: e.target.checked }))} />
+                      Comm % added on top of artist fee
+                    </label>
+                  </div>
                   <div><label>Warchest %</label><input type="number" step="0.01" value={newShow.warchest_pct} onChange={e => setNewShow(s => ({ ...s, warchest_pct: e.target.value }))} /></div>
                   <div><label>Sound (R)</label><input type="number" value={newShow.sound} onChange={e => setNewShow(s => ({ ...s, sound: e.target.value }))} /></div>
                   {artist.mus1_name && <div><label>{artist.mus1_name} (R)</label><input type="number" value={newShow.mus1} onChange={e => setNewShow(s => ({ ...s, mus1: e.target.value }))} /></div>}
@@ -727,6 +749,7 @@ export default function ArtistDetailPage() {
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${
                                   s.status === "All Paid" ? "bg-green-100 text-green-700" :
                                   s.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
+                                  s.status === "Invoiced" ? "bg-orange-100 text-orange-700" :
                                   s.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
                                   "bg-gray-100 text-gray-500"
                                 }`}>{s.status || "—"}</span>
@@ -1276,6 +1299,7 @@ export default function ArtistDetailPage() {
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               s.status === "All Paid" ? "bg-green-100 text-green-700" :
                               s.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
+                              s.status === "Invoiced" ? "bg-orange-100 text-orange-700" :
                               s.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
                               "bg-gray-100 text-gray-500"
                             }`}>{s.status || "—"}</span>

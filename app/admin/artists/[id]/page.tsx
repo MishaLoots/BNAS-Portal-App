@@ -201,6 +201,25 @@ export default function ArtistDetailPage() {
     setSaving(false)
   }
 
+  // Inline edit from the show log (status / dep %) without opening the form
+  async function quickUpdateShow(showId: string, fields: Partial<Pick<Show, "status" | "dep_pct">>) {
+    setShows(prev => prev.map(s => s.id === showId ? { ...s, ...fields } : s))
+    const { error } = await supabase.from("shows").update(fields).eq("id", showId)
+    if (dbErr(error, "updating show")) await load()
+  }
+
+  function quickStatus(s: Show, status: string) {
+    // All Paid means the full fee is in, so bump dep % to 100 as well
+    const fields: Partial<Pick<Show, "status" | "dep_pct">> = { status }
+    if (status === "All Paid" && !s.dep_is_pre) fields.dep_pct = 100
+    quickUpdateShow(s.id, fields)
+  }
+
+  function quickDep(s: Show, value: string) {
+    const pct = Math.min(100, Math.max(0, parseFloat(value) || 0))
+    if (pct !== (s.dep_pct ?? 0)) quickUpdateShow(s.id, { dep_pct: pct })
+  }
+
   async function deleteShow(showId: string, eventName: string) {
     if (!window.confirm(`Delete show "${eventName}"? This cannot be undone.`)) return
     await supabase.from("shows").delete().eq("id", showId)
@@ -746,18 +765,36 @@ export default function ArtistDetailPage() {
                               <td className="text-gray-500 text-xs">{s.responsible_agent}{s.secondary_agent ? ` / ${s.secondary_agent}` : ""}</td>
                               <td className="text-gray-500">{s.batch_num}</td>
                               <td>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  s.status === "All Paid" ? "bg-green-100 text-green-700" :
-                                  s.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
-                                  s.status === "Invoiced" ? "bg-orange-100 text-orange-700" :
-                                  s.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
-                                  "bg-gray-100 text-gray-500"
-                                }`}>{s.status || "—"}</span>
+                                <select
+                                  value={s.status || ""}
+                                  onChange={e => quickStatus(s, e.target.value)}
+                                  title="Change status"
+                                  className={`w-auto text-xs pl-2 pr-6 py-0.5 rounded-full border-0 cursor-pointer ${
+                                    s.status === "All Paid" ? "bg-green-100 text-green-700" :
+                                    s.status === "Fee Received" ? "bg-blue-100 text-blue-700" :
+                                    s.status === "Invoiced" ? "bg-orange-100 text-orange-700" :
+                                    s.status === "Pending" ? "bg-yellow-100 text-yellow-700" :
+                                    "bg-gray-100 text-gray-500"
+                                  }`}
+                                >
+                                  {!s.status && <option value="">—</option>}
+                                  {STATUSES.map(st => <option key={st}>{st}</option>)}
+                                </select>
                               </td>
                               <td className="text-center">
-                                {s.dep_is_pre ? <span className="text-xs text-purple-600">Pre</span>
-                                  : s.dep_pct !== null ? `${s.dep_pct}%`
-                                  : "—"}
+                                {s.dep_is_pre ? <span className="text-xs text-purple-600">Pre</span> : (
+                                  <span className="inline-flex items-center gap-0.5">
+                                    <input
+                                      key={`${s.id}-${s.dep_pct}`}
+                                      type="number" min="0" max="100" step="1"
+                                      defaultValue={s.dep_pct ?? 0}
+                                      onBlur={e => quickDep(s, e.target.value)}
+                                      onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur() }}
+                                      title="% of fee received"
+                                      className="w-14 text-xs text-center py-0.5 px-1"
+                                    />%
+                                  </span>
+                                )}
                               </td>
                               <td className="whitespace-nowrap">
                                 <button onClick={() => startEditShow(s)} className="text-xs text-bblue hover:text-navy mr-2">Edit</button>
